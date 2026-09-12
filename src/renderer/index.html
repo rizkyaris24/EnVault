@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>EnVault — Passive .env Backup</title>
+    <!-- Prevent unauthorized scripts / connect sources -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self';"
+    />
+  </head>
+  <body class="bg-[#030607] text-[#F1F1F1] antialiased selection:bg-[#35C9B5] selection:text-[#030607] select-none overflow-hidden h-screen w-screen">
+    <div id="root" class="h-full w-full"></div>
+    <script type="module" src="./src/main.tsx"></script>
+  </body>
+</html>
