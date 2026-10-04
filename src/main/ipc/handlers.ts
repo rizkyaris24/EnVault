@@ -1,4 +1,4 @@
-import { ipcMain, dialog, shell, BrowserWindow } from 'electron'
+import { ipcMain, dialog, shell, BrowserWindow, nativeTheme } from 'electron'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as crypto from 'crypto'
@@ -280,4 +280,21 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       return { success: false, error: (err as Error).message }
     }
   })
+
+  // Theme: Set
+  ipcMain.handle(
+    IPC_CHANNELS.THEME_SET,
+    async (_event, theme: 'system' | 'light' | 'dark'): Promise<IPCResult<boolean>> => {
+      try {
+        nativeTheme.themeSource = theme
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          const isDark = theme === 'system' ? nativeTheme.shouldUseDarkColors : theme === 'dark'
+          mainWindow.setBackgroundColor(isDark ? '#0B0B0C' : '#FAFAFA')
+        }
+        return { success: true, data: true }
+      } catch (err) {
+        return { success: false, error: (err as Error).message }
+      }
+    }
+  )
 }

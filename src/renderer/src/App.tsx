@@ -22,13 +22,11 @@ import { ConfirmRestoreModal } from './components/Modals/ConfirmRestoreModal'
 import { ComputerScanModal } from './components/Modals/ComputerScanModal'
 import { DeleteProjectModal } from './components/Modals/DeleteProjectModal'
 import { ToastContainer, ToastMessage } from './components/Common/Toast'
+import { CommandPalette } from './components/Common/CommandPalette'
+import { Button, Kbd } from './components/ui'
 import {
-  FolderLock,
-  ShieldCheck,
   Plus,
-  Radar,
-  Lock,
-  RotateCcw,
+  Compass,
   FileCode
 } from 'lucide-react'
 
@@ -38,6 +36,7 @@ export const App: React.FC = () => {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
   const [vaultStatus, setVaultStatus] = useState<VaultStatus | null>(null)
   const [toasts, setToasts] = useState<ToastMessage[]>([])
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false)
 
   // Project Detail State
   const [files, setFiles] = useState<EnvFile[]>([])
@@ -304,11 +303,6 @@ export const App: React.FC = () => {
         isScanning: false,
         summary: res.data!
       }))
-      addToast(
-        'success',
-        'Computer Scan Complete',
-        `Discovered ${res.data.discoveredFiles} file(s) across ${res.data.discoveredProjects} project(s). Automatically backed up.`
-      )
       await loadProjects()
       await loadVaultStatus()
     } else {
@@ -331,11 +325,10 @@ export const App: React.FC = () => {
       const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0
       const cmdOrCtrl = isMac ? e.metaKey : e.ctrlKey
 
-      // Cmd+K: Focus search input
+      // Cmd+K: Open Command Palette
       if (cmdOrCtrl && e.key.toLowerCase() === 'k') {
         e.preventDefault()
-        const searchInput = document.querySelector<HTMLInputElement>('input[placeholder*="Search projects"]')
-        searchInput?.focus()
+        setIsCommandPaletteOpen((prev) => !prev)
         return
       }
 
@@ -456,7 +449,7 @@ export const App: React.FC = () => {
   const selectedFile = files.find((f) => f.id === selectedFileId)
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-palette-void text-palette-white font-sans select-none">
+    <div className="flex h-screen w-screen overflow-hidden bg-canvas text-fg font-sans select-none">
       {/* Sidebar */}
       <Sidebar
         projects={projects}
@@ -466,10 +459,11 @@ export const App: React.FC = () => {
         onAddProject={handleAddProject}
         onScanComputer={handleScanComputer}
         onDeleteProject={handleDeleteProject}
+        onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
       />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden bg-palette-void">
+      <main className="flex-1 flex flex-col h-full overflow-hidden bg-canvas">
         {selectedProject ? (
           <>
             <ProjectHeader
@@ -496,20 +490,21 @@ export const App: React.FC = () => {
 
             {/* View content based on activeView */}
             {files.length === 0 ? (
-              <div className="flex-1 flex flex-col items-center justify-center p-8 text-center select-none">
-                <div className="w-14 h-14 rounded-2xl bg-palette-charcoal border border-palette-slate flex items-center justify-center mb-3 text-palette-mint">
-                  <FileCode className="w-7 h-7" />
-                </div>
-                <h3 className="text-sm font-bold text-palette-white">No .env files tracked in this project</h3>
-                <p className="text-xs text-palette-stone mt-1 max-w-sm leading-relaxed">
+              <div className="flex-1 flex flex-col items-center justify-center p-8 text-center select-none max-w-md mx-auto">
+                <FileCode className="w-8 h-8 text-fg-subtle mb-3 opacity-60" />
+                <h2 className="text-title font-semibold text-fg">No .env files tracked in this project</h2>
+                <p className="text-meta text-fg-muted mt-1 leading-relaxed">
                   Create a .env file in this directory or snapshot to begin passive tracking.
                 </p>
-                <button
-                  onClick={handleBackupNow}
-                  className="mt-4 px-4 py-2 bg-palette-charcoal hover:bg-palette-night border border-palette-slate text-palette-mint rounded-xl text-xs font-semibold transition active:scale-[0.98]"
-                >
-                  Snapshot Now
-                </button>
+                <div className="mt-5">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={handleBackupNow}
+                  >
+                    Snapshot Now
+                  </Button>
+                </div>
               </div>
             ) : (
               <>
@@ -545,86 +540,47 @@ export const App: React.FC = () => {
             )}
           </>
         ) : (
-          /* Empty State — Aesthetic-Usability Effect & Peak-End Rule */
-          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center select-none max-w-2xl mx-auto">
-            <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-palette-mint to-palette-teal p-0.5 shadow-2xl shadow-palette-mint/20 mb-6">
-              <div className="w-full h-full bg-palette-charcoal rounded-[22px] flex items-center justify-center">
-                <FolderLock className="w-10 h-10 text-palette-mint" />
-              </div>
-            </div>
-
-            <h1 className="text-2xl font-bold tracking-tight text-palette-white">
-              <span>Delete the project. </span>
-              <span className="text-palette-mint">Keep the secrets.</span>
+          /* Empty State — Utilitarian, Minimalist */
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center select-none max-w-lg mx-auto">
+            <h1 className="text-display font-semibold text-fg tracking-tight">
+              EnVault
             </h1>
-
-            <p className="text-xs text-palette-stone max-w-md mt-2 leading-relaxed">
-              Passive, encrypted, and versioned backups for all your local <span className="font-mono text-palette-white">.env</span> files. Zero cloud leakage.
+            <p className="text-ui text-fg-muted mt-2 leading-relaxed max-w-md">
+              Passive, encrypted, and versioned backups for local environment configurations.
             </p>
 
-            {/* Ergonomic Quick Action Cards (Fitts's Law) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 w-full mt-8">
-              <button
+            <div className="flex items-center gap-3 mt-6">
+              <Button
+                variant="primary"
+                size="md"
                 onClick={handleAddProject}
-                className="group flex flex-col items-start p-4 rounded-2xl bg-palette-charcoal/90 border border-palette-slate hover:border-palette-mint/60 hover:bg-palette-charcoal text-left transition-all duration-150 shadow-md active:scale-[0.98]"
+                leftIcon={<Plus className="w-4 h-4" />}
+                rightIcon={<Kbd shortcut="⌘N" />}
               >
-                <div className="flex items-center justify-between w-full mb-2">
-                  <div className="w-8 h-8 rounded-lg bg-palette-mint/10 border border-palette-mint/30 flex items-center justify-center text-palette-mint group-hover:scale-105 transition-transform">
-                    <Plus className="w-4 h-4" />
-                  </div>
-                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-palette-navy border border-palette-slate text-palette-stone">
-                    ⌘N
-                  </span>
-                </div>
-                <div className="font-bold text-xs text-palette-white group-hover:text-palette-mint transition-colors">
-                  Add Project Folder
-                </div>
-                <div className="text-[11px] text-palette-stone mt-0.5 leading-normal">
-                  Select an existing directory to register and passively monitor .env files.
-                </div>
-              </button>
+                Add Project Folder
+              </Button>
 
-              <button
+              <Button
+                variant="secondary"
+                size="md"
                 onClick={handleScanComputer}
-                className="group flex flex-col items-start p-4 rounded-2xl bg-palette-charcoal/90 border border-palette-slate hover:border-palette-teal/60 hover:bg-palette-charcoal text-left transition-all duration-150 shadow-md active:scale-[0.98]"
+                leftIcon={<Compass className="w-4 h-4 text-accent" />}
+                rightIcon={<Kbd shortcut="⇧⌘S" />}
               >
-                <div className="flex items-center justify-between w-full mb-2">
-                  <div className="w-8 h-8 rounded-lg bg-palette-teal/10 border border-palette-teal/30 flex items-center justify-center text-palette-teal group-hover:scale-105 transition-transform">
-                    <Radar className="w-4 h-4" />
-                  </div>
-                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-palette-navy border border-palette-slate text-palette-stone">
-                    ⇧⌘S
-                  </span>
-                </div>
-                <div className="font-bold text-xs text-palette-white group-hover:text-palette-teal transition-colors">
-                  Scan Entire Computer
-                </div>
-                <div className="text-[11px] text-palette-stone mt-0.5 leading-normal">
-                  Automatically discover all repos on your disk and batch ingest them safely.
-                </div>
-              </button>
+                Scan Computer
+              </Button>
             </div>
 
-            {/* Feature Trust Pills */}
-            <div className="mt-8 flex items-center justify-center flex-wrap gap-4 text-[11px] text-palette-stone">
-              <div className="flex items-center space-x-1.5">
-                <ShieldCheck className="w-4 h-4 text-palette-mint" />
-                <span>AES-256-GCM Vault</span>
-              </div>
-              <span className="text-palette-slate">•</span>
-              <div className="flex items-center space-x-1.5">
-                <Lock className="w-3.5 h-3.5 text-palette-mint" />
-                <span>OS Keychain Protected</span>
-              </div>
-              <span className="text-palette-slate">•</span>
-              <div className="flex items-center space-x-1.5">
-                <RotateCcw className="w-3.5 h-3.5 text-palette-teal" />
-                <span>Instant Rollback</span>
-              </div>
+            <div className="mt-10 pt-6 border-t border-line-subtle w-full flex items-center justify-center gap-6 text-meta text-fg-subtle">
+              <span>AES-256-GCM encrypted</span>
+              <span>•</span>
+              <span>OS Keychain protected</span>
+              <span>•</span>
+              <span>100% offline</span>
             </div>
           </div>
         )}
-      </div>
+      </main>
 
       {/* Modals & Dialogs */}
       <ImportChecklistModal
@@ -675,6 +631,18 @@ export const App: React.FC = () => {
         isLoading={deleteModal.isLoading}
         onClose={() => setDeleteModal({ isOpen: false, project: null, isLoading: false })}
         onConfirm={handleConfirmDeleteProject}
+      />
+
+      {/* Global Command Palette (Cmd+K) */}
+      <CommandPalette
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+        projects={projects}
+        onSelectProject={(id) => setSelectedProjectId(id)}
+        onAddProject={handleAddProject}
+        onScanComputer={handleScanComputer}
+        onSnapshotNow={handleBackupNow}
+        onChangeView={(v) => setActiveView(v)}
       />
 
       {/* Toast notifications */}

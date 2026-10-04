@@ -2,12 +2,13 @@ import React from 'react'
 import { Project, EnvFile } from '@shared/types'
 import {
   ExternalLink,
-  Save,
+  Camera,
   Code,
   ListFilter,
   History,
   FileText
 } from 'lucide-react'
+import { Button, IconButton, SegmentedControl } from '../ui'
 
 interface ProjectHeaderProps {
   project: Project
@@ -34,76 +35,86 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
   onRevealFolder,
   onBackupNow
 }) => {
+  const viewOptions: { value: 'table' | 'raw' | 'history'; label: string; icon: React.ReactNode; badge?: number }[] = [
+    { value: 'table', label: 'Secrets', icon: <ListFilter className="w-3.5 h-3.5" /> },
+    { value: 'raw', label: 'Raw', icon: <Code className="w-3.5 h-3.5" /> },
+    { value: 'history', label: 'History', icon: <History className="w-3.5 h-3.5" />, badge: versionCount }
+  ]
+
   return (
-    <div className="border-b border-palette-slate/60 bg-palette-navy/90 text-palette-white select-none">
-      {/* Top breadcrumb & action row */}
+    <header className="border-b border-line bg-surface select-none">
+      {/* Top Breadcrumb & Actions Bar */}
       <div className="titlebar-drag-region pt-7 px-6 pb-3 flex items-center justify-between">
         <div className="titlebar-no-drag flex items-center space-x-3 min-w-0">
           <div className="min-w-0">
             <div className="flex items-center space-x-2">
-              <h1 className="text-base font-bold text-palette-white tracking-tight truncate">
+              <h1 className="text-title font-semibold text-fg tracking-tight truncate">
                 {project.name}
               </h1>
-              <button
+              <IconButton
+                icon={<ExternalLink className="w-3.5 h-3.5" />}
+                label="Reveal project folder"
+                size="sm"
+                variant="ghost"
                 onClick={onRevealFolder}
-                className="p-1 rounded-md text-palette-moss hover:text-palette-mint hover:bg-palette-charcoal transition"
-                title="Reveal project directory in Finder / Explorer"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-              </button>
+                className="text-fg-subtle hover:text-fg"
+              />
             </div>
-            <div className="text-[11px] font-mono text-palette-stone mt-0.5 truncate max-w-xl">
+            <div className="text-meta font-mono text-fg-subtle truncate max-w-xl">
               {project.path}
             </div>
           </div>
         </div>
 
-        {/* Top Right: Watcher Status & Snapshot Action */}
+        {/* Primary Action & Status */}
         <div className="titlebar-no-drag flex items-center space-x-3 shrink-0">
           <div
-            className="hidden sm:flex items-center space-x-1.5 px-2.5 py-1 rounded-md bg-palette-charcoal/80 border border-palette-slate/50 text-[11px] text-palette-stone"
-            title="Chokidar background file watcher is monitoring local .env changes"
+            className="hidden sm:flex items-center space-x-1.5 px-2 py-1 rounded-control bg-raised border border-line text-meta text-fg-muted"
+            title="Continuous background file monitoring active"
           >
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-palette-mint opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-palette-mint"></span>
-            </span>
-            <span className="font-medium">Live Watcher</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-success shrink-0" />
+            <span>Watching</span>
           </div>
 
-          <button
+          <Button
+            size="sm"
+            variant="primary"
             onClick={onBackupNow}
-            disabled={isBackingUp}
-            className="flex items-center space-x-2 px-3.5 py-1.5 bg-palette-mint hover:bg-palette-teal text-palette-void rounded-lg text-xs font-semibold shadow-md shadow-palette-mint/15 transition active:scale-[0.98] disabled:opacity-50"
-            title="Immediately create a new encrypted snapshot of this project"
+            isLoading={isBackingUp}
+            leftIcon={<Camera className="w-3.5 h-3.5" />}
+            title="Create an immediate encrypted snapshot"
           >
-            <Save className={`w-3.5 h-3.5 ${isBackingUp ? 'animate-spin' : ''}`} />
-            <span>{isBackingUp ? 'Backing up...' : 'Snapshot Now'}</span>
-          </button>
+            {isBackingUp ? 'Snapshotting...' : 'Snapshot'}
+          </Button>
         </div>
       </div>
 
-      {/* Navigation Subbar: File Tabs (Left) + View Mode Switcher (Right) */}
-      <div className="px-6 flex items-center justify-between border-t border-palette-slate/40 bg-palette-void/40">
-        {/* Horizontal scrollable file tabs */}
-        <div className="flex items-center space-x-1 overflow-x-auto py-2 pr-4 scrollbar-none">
+      {/* Navigation Subbar: File Tabs & View Switcher */}
+      <div className="px-6 flex items-center justify-between border-t border-line-subtle bg-canvas">
+        {/* Horizontal File Tabs */}
+        <div className="flex items-center space-x-1 overflow-x-auto py-1.5 pr-4 scrollbar-none">
           {files.map((file) => {
             const isSelected = file.id === selectedFileId
             return (
               <button
                 key={file.id}
+                type="button"
                 onClick={() => onSelectFile(file.id)}
-                className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs font-mono transition shrink-0 ${
+                className={`flex items-center space-x-2 px-3 py-1.5 rounded-control text-meta font-mono transition-colors shrink-0 outline-none focus-visible:outline-2 focus-visible:outline-accent ${
                   isSelected
-                    ? 'bg-palette-charcoal text-palette-mint border border-palette-mint/40 font-medium shadow-sm'
-                    : 'text-palette-stone hover:text-palette-white hover:bg-palette-surface/80 border border-transparent'
+                    ? 'bg-surface text-fg font-medium border border-line shadow-xs'
+                    : 'text-fg-muted hover:text-fg hover:bg-surface/60 border border-transparent'
                 }`}
               >
-                <FileText className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-palette-mint' : 'text-palette-moss'}`} />
+                <FileText
+                  className={`w-3.5 h-3.5 shrink-0 ${
+                    isSelected ? 'text-accent' : 'text-fg-subtle'
+                  }`}
+                />
                 <span>{file.relativePath}</span>
                 {!file.existsOnDisk && (
                   <span
-                    className="w-2 h-2 rounded-full bg-rose-400 animate-pulse"
+                    className="w-1.5 h-1.5 rounded-full bg-danger shrink-0"
                     title="Missing on disk"
                   />
                 )}
@@ -112,54 +123,16 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
           })}
         </div>
 
-        {/* View Mode Segmented Control (Secrets / Raw / History) */}
-        <div className="flex items-center space-x-0.5 bg-palette-charcoal p-1 rounded-lg border border-palette-slate/60 shrink-0 my-1.5">
-          <button
-            onClick={() => onChangeView('table')}
-            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition ${
-              activeView === 'table'
-                ? 'bg-palette-navy text-palette-mint border border-palette-mint/30 shadow-sm'
-                : 'text-palette-stone hover:text-palette-white'
-            }`}
-          >
-            <ListFilter className="w-3.5 h-3.5" />
-            <span>Secrets</span>
-          </button>
-
-          <button
-            onClick={() => onChangeView('raw')}
-            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition ${
-              activeView === 'raw'
-                ? 'bg-palette-navy text-palette-mint border border-palette-mint/30 shadow-sm'
-                : 'text-palette-stone hover:text-palette-white'
-            }`}
-          >
-            <Code className="w-3.5 h-3.5" />
-            <span>Raw</span>
-          </button>
-
-          <button
-            onClick={() => onChangeView('history')}
-            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition ${
-              activeView === 'history'
-                ? 'bg-palette-navy text-palette-mint border border-palette-mint/30 shadow-sm'
-                : 'text-palette-stone hover:text-palette-white'
-            }`}
-          >
-            <History className="w-3.5 h-3.5" />
-            <span>History</span>
-            <span
-              className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
-                activeView === 'history'
-                  ? 'bg-palette-mint/20 text-palette-mint font-semibold'
-                  : 'bg-palette-slate text-palette-stone'
-              }`}
-            >
-              {versionCount}
-            </span>
-          </button>
+        {/* View Mode Segmented Control */}
+        <div className="shrink-0 my-1">
+          <SegmentedControl
+            options={viewOptions}
+            value={activeView}
+            onChange={onChangeView}
+            size="sm"
+          />
         </div>
       </div>
-    </div>
+    </header>
   )
 }

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useRef } from 'react'
 import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react'
 
 export interface ToastMessage {
@@ -15,7 +15,12 @@ interface ToastContainerProps {
 
 export const ToastContainer: React.FC<ToastContainerProps> = ({ toasts, onDismiss }) => {
   return (
-    <div className="fixed bottom-4 right-4 z-50 flex flex-col space-y-2 pointer-events-none max-w-sm w-full">
+    <div
+      role="region"
+      aria-live="polite"
+      aria-label="Notifications"
+      className="fixed bottom-4 right-4 z-40 flex flex-col space-y-2 pointer-events-none max-w-sm w-full"
+    >
       {toasts.map((toast) => (
         <ToastItem key={toast.id} toast={toast} onDismiss={onDismiss} />
       ))}
@@ -27,41 +32,50 @@ const ToastItem: React.FC<{ toast: ToastMessage; onDismiss: (id: string) => void
   toast,
   onDismiss
 }) => {
-  useEffect(() => {
-    const timer = setTimeout(() => {
+  const timerRef = useRef<NodeJS.Timeout | null>(null)
+
+  const startTimer = (): void => {
+    timerRef.current = setTimeout(() => {
       onDismiss(toast.id)
-    }, 4500)
-    return () => clearTimeout(timer)
+    }, 4000)
+  }
+
+  const clearTimer = (): void => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current)
+    }
+  }
+
+  useEffect(() => {
+    startTimer()
+    return () => clearTimer()
   }, [toast.id, onDismiss])
 
   const iconMap = {
-    success: <CheckCircle2 className="w-4 h-4 text-palette-mint shrink-0" />,
-    warning: <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />,
-    error: <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />,
-    info: <Info className="w-4 h-4 text-palette-teal shrink-0" />
-  }
-
-  const borderMap = {
-    success: 'border-palette-mint/60 bg-palette-charcoal/95 text-palette-white',
-    warning: 'border-amber-400/60 bg-palette-charcoal/95 text-palette-white',
-    error: 'border-rose-400/60 bg-palette-charcoal/95 text-palette-white',
-    info: 'border-palette-teal/60 bg-palette-charcoal/95 text-palette-white'
+    success: <CheckCircle2 className="w-4 h-4 text-success shrink-0" />,
+    warning: <AlertCircle className="w-4 h-4 text-warn shrink-0" />,
+    error: <AlertCircle className="w-4 h-4 text-danger shrink-0" />,
+    info: <Info className="w-4 h-4 text-accent shrink-0" />
   }
 
   return (
     <div
-      className={`pointer-events-auto flex items-start space-x-3 p-3.5 rounded-xl border shadow-xl backdrop-blur-md transition-all animate-in fade-in slide-in-from-bottom-2 ${
-        borderMap[toast.type]
-      }`}
+      onMouseEnter={clearTimer}
+      onMouseLeave={startTimer}
+      className="pointer-events-auto flex items-start space-x-3 p-3 rounded-control border border-line bg-surface text-fg shadow-lg animate-fade-in transition-all select-none"
     >
       {iconMap[toast.type]}
-      <div className="flex-1 text-xs">
-        <div className="font-semibold text-palette-linen">{toast.title}</div>
-        {toast.message && <div className="text-palette-stone mt-0.5">{toast.message}</div>}
+      <div className="flex-1 text-meta min-w-0">
+        <div className="font-medium text-fg truncate">{toast.title}</div>
+        {toast.message && (
+          <div className="text-fg-muted mt-0.5 leading-snug">{toast.message}</div>
+        )}
       </div>
       <button
+        type="button"
         onClick={() => onDismiss(toast.id)}
-        className="text-palette-moss hover:text-palette-linen p-0.5"
+        className="text-fg-subtle hover:text-fg p-0.5 rounded-chip transition-colors"
+        aria-label="Dismiss notification"
       >
         <X className="w-3.5 h-3.5" />
       </button>

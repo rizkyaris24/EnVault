@@ -36,6 +36,7 @@ export interface EnVaultApi {
     getStatus: () => Promise<IPCResult<VaultStatus>>
     getReuse: (projectId: string) => Promise<IPCResult<Record<string, SecretReuseReference[]>>>
   }
+  setTheme: (theme: 'system' | 'light' | 'dark') => Promise<IPCResult<boolean>>
   onBackupUpdated: (callback: (payload: { fileId: string; projectId: string; version: any }) => void) => () => void
   onFileStatusChanged: (callback: (payload: { fileId: string; projectId: string; existsOnDisk: boolean }) => void) => () => void
   onScanProgress: (callback: (payload: ScanProgressPayload) => void) => () => void
@@ -63,6 +64,7 @@ const api: EnVaultApi = {
     getStatus: () => ipcRenderer.invoke(IPC_CHANNELS.SECURITY_GET_STATUS),
     getReuse: (projectId) => ipcRenderer.invoke(IPC_CHANNELS.SECURITY_GET_REUSE, projectId)
   },
+  setTheme: (theme) => ipcRenderer.invoke(IPC_CHANNELS.THEME_SET, theme),
   onBackupUpdated: (callback) => {
     const handler = (_event: any, payload: any): void => callback(payload)
     ipcRenderer.on(IPC_CHANNELS.EVENT_BACKUP_UPDATED, handler)

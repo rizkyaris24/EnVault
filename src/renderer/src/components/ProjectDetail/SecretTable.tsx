@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { SecretEntry, SecretReuseReference } from '@shared/types'
 import {
   Eye,
@@ -7,11 +7,10 @@ import {
   Check,
   Search,
   AlertTriangle,
-  Lock,
-  Layers,
   X,
   Key
 } from 'lucide-react'
+import { Button, IconButton, Badge } from '../ui'
 
 interface SecretTableProps {
   secrets: SecretEntry[]
@@ -23,7 +22,18 @@ export const SecretTable: React.FC<SecretTableProps> = ({ secrets, onCopySecret 
   const [revealedKeys, setRevealedKeys] = useState<Set<string>>(new Set())
   const [copiedItem, setCopiedItem] = useState<{ id: string; type: 'val' | 'key' } | null>(null)
   const [activeReusePopover, setActiveReusePopover] = useState<string | null>(null)
+  const [selectedIndex, setSelectedIndex] = useState<number>(0)
   const popoverRef = useRef<HTMLDivElement>(null)
+  const tableRef = useRef<HTMLTableElement>(null)
+
+  const filteredSecrets = secrets.filter((s) =>
+    s.key.toLowerCase().includes(filter.toLowerCase())
+  )
+
+  useEffect(() => {
+    // Reset selected index when filter changes
+    setSelectedIndex(0)
+  }, [filter])
 
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent): void => {
@@ -44,15 +54,17 @@ export const SecretTable: React.FC<SecretTableProps> = ({ secrets, onCopySecret 
     }
   }, [])
 
-  const toggleReveal = (key: string): void => {
-    const next = new Set(revealedKeys)
-    if (next.has(key)) {
-      next.delete(key)
-    } else {
-      next.add(key)
-    }
-    setRevealedKeys(next)
-  }
+  const toggleReveal = useCallback((key: string): void => {
+    setRevealedKeys((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) {
+        next.delete(key)
+      } else {
+        next.add(key)
+      }
+      return next
+    })
+  }, [])
 
   const toggleRevealAll = (): void => {
     if (revealedKeys.size === secrets.length) {
@@ -62,41 +74,75 @@ export const SecretTable: React.FC<SecretTableProps> = ({ secrets, onCopySecret 
     }
   }
 
-  const handleCopyValue = (key: string, value: string): void => {
-    onCopySecret(value, key)
-    setCopiedItem({ id: key, type: 'val' })
-    setTimeout(() => setCopiedItem(null), 1800)
-  }
+  const handleCopyValue = useCallback(
+    (key: string, value: string): void => {
+      onCopySecret(value, key)
+      setCopiedItem({ id: key, type: 'val' })
+      setTimeout(() => setCopiedItem(null), 1500)
+    },
+    [onCopySecret]
+  )
 
-  const handleCopyKey = (key: string): void => {
+  const handleCopyKey = useCallback((key: string): void => {
     navigator.clipboard.writeText(key)
     setCopiedItem({ id: key, type: 'key' })
-    setTimeout(() => setCopiedItem(null), 1800)
-  }
+    setTimeout(() => setCopiedItem(null), 1500)
+  }, [])
 
-  const filteredSecrets = secrets.filter((s) =>
-    s.key.toLowerCase().includes(filter.toLowerCase())
-  )
+  // Keyboard navigation across secrets table
+  useEffect(() => {
+    const handleTableKeyDown = (e: KeyboardEvent): void => {
+      const target = e.target as HTMLElement | null
+      const isInput = target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA'
+      if (isInput) return
+
+      if (filteredSecrets.length === 0) return
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setSelectedIndex((prev) => Math.min(prev + 1, filteredSecrets.length - 1))
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setSelectedIndex((prev) => Math.max(prev - 1, 0))
+      } else if (e.key === 'Enter') {
+        e.preventDefault()
+        const selected = filteredSecrets[selectedIndex]
+        if (selected) {
+          toggleReveal(selected.key)
+        }
+      } else if (e.key === 'c' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        const selected = filteredSecrets[selectedIndex]
+        if (selected) {
+          handleCopyValue(selected.key, selected.value)
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleTableKeyDown)
+    return () => window.removeEventListener('keydown', handleTableKeyDown)
+  }, [filteredSecrets, selectedIndex, toggleReveal, handleCopyValue])
 
   const allRevealed = secrets.length > 0 && revealedKeys.size === secrets.length
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden text-palette-white select-none bg-palette-void">
+    <div className="flex-1 flex flex-col overflow-hidden text-fg select-none bg-canvas">
       {/* Search & Actions Bar */}
-      <div className="px-6 py-3 border-b border-palette-slate/40 bg-palette-navy/60 flex items-center justify-between gap-4">
+      <div className="px-6 py-2.5 border-b border-line bg-surface flex items-center justify-between gap-4">
         <div className="relative w-72 flex items-center">
-          <Search className="w-3.5 h-3.5 text-palette-moss absolute left-2.5 pointer-events-none" />
+          <Search className="w-3.5 h-3.5 text-fg-subtle absolute left-2.5 pointer-events-none" />
           <input
             type="text"
             placeholder="Filter variable keys..."
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            className="w-full bg-palette-charcoal border border-palette-slate rounded-lg pl-8 pr-8 py-1.5 text-xs text-palette-white placeholder-palette-moss focus:outline-none focus:border-palette-mint transition"
+            className="w-full h-8 bg-raised text-fg placeholder:text-fg-subtle border border-line rounded-control pl-8 pr-8 text-meta focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors"
           />
           {filter && (
             <button
+              type="button"
               onClick={() => setFilter('')}
-              className="absolute right-2.5 text-palette-moss hover:text-palette-white transition p-0.5"
+              className="absolute right-2 p-1 text-fg-subtle hover:text-fg rounded-control transition-colors"
               title="Clear filter"
             >
               <X className="w-3.5 h-3.5" />
@@ -104,189 +150,211 @@ export const SecretTable: React.FC<SecretTableProps> = ({ secrets, onCopySecret 
           )}
         </div>
 
-        <div className="flex items-center space-x-3 text-xs">
-          <span className="text-palette-stone font-mono text-[11px]">
+        <div className="flex items-center space-x-3 text-meta">
+          <span className="text-fg-subtle font-mono">
             {filteredSecrets.length} of {secrets.length} {secrets.length === 1 ? 'secret' : 'secrets'}
           </span>
-          <button
+          <Button
+            size="sm"
+            variant="secondary"
             onClick={toggleRevealAll}
-            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-palette-charcoal hover:bg-palette-night border border-palette-slate text-palette-stone hover:text-palette-white transition active:scale-[0.98]"
+            leftIcon={
+              allRevealed ? (
+                <EyeOff className="w-3.5 h-3.5 text-accent" />
+              ) : (
+                <Eye className="w-3.5 h-3.5" />
+              )
+            }
           >
-            {allRevealed ? <EyeOff className="w-3.5 h-3.5 text-palette-mint" /> : <Eye className="w-3.5 h-3.5" />}
-            <span className="font-medium text-xs">{allRevealed ? 'Mask All' : 'Reveal All'}</span>
-          </button>
+            {allRevealed ? 'Mask All' : 'Reveal All'}
+          </Button>
         </div>
       </div>
 
-      {/* Secrets Content Area */}
-      <div className="flex-1 overflow-y-auto px-6 py-4">
+      {/* Secrets Table Viewport */}
+      <div className="flex-1 overflow-y-auto">
         {filteredSecrets.length === 0 ? (
           <div className="text-center py-20">
-            <div className="w-10 h-10 rounded-full bg-palette-charcoal border border-palette-slate flex items-center justify-center mx-auto mb-3">
-              <Key className="w-5 h-5 text-palette-moss" />
-            </div>
-            <p className="text-xs font-semibold text-palette-white">
+            <Key className="w-7 h-7 text-fg-subtle mx-auto mb-2 opacity-40" />
+            <p className="text-ui font-medium text-fg">
               {secrets.length === 0 ? 'No variables defined in this file' : 'No matching secrets found'}
             </p>
-            <p className="text-[11px] text-palette-stone mt-1 max-w-sm mx-auto">
+            <p className="text-meta text-fg-subtle mt-1 max-w-sm mx-auto">
               {secrets.length === 0
                 ? 'This file appears to be empty or contains only comments.'
                 : `No secret keys matched "${filter}".`}
             </p>
             {filter && (
-              <button
-                onClick={() => setFilter('')}
-                className="mt-3 px-3 py-1 bg-palette-charcoal hover:bg-palette-slate border border-palette-slate text-palette-mint rounded-md text-xs font-medium transition"
-              >
-                Clear Filter
-              </button>
+              <div className="mt-4">
+                <Button size="sm" variant="secondary" onClick={() => setFilter('')}>
+                  Clear Filter
+                </Button>
+              </div>
             )}
           </div>
         ) : (
-          <div className="border border-palette-slate/60 rounded-xl overflow-visible bg-palette-navy/40 divide-y divide-palette-slate/40 shadow-sm">
-            {filteredSecrets.map((secret) => {
-              const isRevealed = revealedKeys.has(secret.key)
-              const isValCopied = copiedItem?.id === secret.key && copiedItem?.type === 'val'
-              const isKeyCopied = copiedItem?.id === secret.key && copiedItem?.type === 'key'
-              const hasReuse = secret.reusedIn && secret.reusedIn.length > 0
-              const isPopoverOpen = activeReusePopover === secret.key
+          <table ref={tableRef} className="w-full border-collapse text-left">
+            <thead className="sticky top-0 z-10 bg-surface border-b border-line text-meta font-medium text-fg-subtle select-none">
+              <tr>
+                <th scope="col" className="py-2 px-6 w-1/3">
+                  Key
+                </th>
+                <th scope="col" className="py-2 px-4 w-1/2">
+                  Value
+                </th>
+                <th scope="col" className="py-2 px-6 text-right w-1/6">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line-subtle text-ui">
+              {filteredSecrets.map((secret, index) => {
+                const isSelected = index === selectedIndex
+                const isRevealed = revealedKeys.has(secret.key)
+                const isValCopied = copiedItem?.id === secret.key && copiedItem?.type === 'val'
+                const isKeyCopied = copiedItem?.id === secret.key && copiedItem?.type === 'key'
+                const hasReuse = secret.reusedIn && secret.reusedIn.length > 0
+                const isPopoverOpen = activeReusePopover === secret.key
 
-              return (
-                <div
-                  key={secret.key}
-                  className="group flex flex-col md:flex-row md:items-center justify-between px-4 py-3 hover:bg-palette-charcoal/50 transition gap-2"
-                >
-                  {/* Key & Reuse indicator */}
-                  <div className="flex items-center space-x-2.5 min-w-[260px] max-w-sm shrink-0">
-                    <button
-                      onClick={() => handleCopyKey(secret.key)}
-                      className="flex items-center space-x-2 text-left group/key text-palette-white hover:text-palette-mint transition"
-                      title="Click to copy key name"
-                    >
-                      <Lock className="w-3.5 h-3.5 text-palette-moss group-hover/key:text-palette-mint shrink-0 transition" />
-                      <span className="font-mono font-medium text-xs truncate max-w-[220px]">
-                        {secret.key}
-                      </span>
-                    </button>
-
-                    {isKeyCopied && (
-                      <span className="px-1.5 py-0.2 bg-palette-mint text-palette-void rounded text-[10px] font-semibold animate-fade-in">
-                        Key Copied!
-                      </span>
-                    )}
-
-                    {/* Salted HMAC Reuse Badge */}
-                    {hasReuse && (
-                      <div className="relative">
+                return (
+                  <tr
+                    key={secret.key}
+                    tabIndex={0}
+                    onClick={() => setSelectedIndex(index)}
+                    className={`transition-colors duration-100 group ${
+                      isSelected ? 'bg-raised' : 'hover:bg-raised/50'
+                    }`}
+                  >
+                    {/* Key Column */}
+                    <td className="py-2.5 px-6 font-mono text-ui align-middle">
+                      <div className="flex items-center space-x-2">
                         <button
-                          onClick={() =>
-                            setActiveReusePopover(isPopoverOpen ? null : secret.key)
-                          }
-                          className="flex items-center space-x-1 px-2 py-0.5 rounded-full bg-palette-charcoal border border-palette-mint/40 text-palette-mint text-[10px] font-sans hover:bg-palette-slate transition"
-                          title="View other projects sharing this secret value"
+                          type="button"
+                          onClick={() => handleCopyKey(secret.key)}
+                          className="font-medium text-fg hover:text-accent transition-colors text-left truncate max-w-xs focus:outline-none"
+                          title="Click to copy key name"
                         >
-                          <AlertTriangle className="w-3 h-3 text-palette-mint shrink-0" />
-                          <span>Reused ({secret.reusedIn!.length})</span>
+                          {secret.key}
                         </button>
 
-                        {/* Reuse Popover */}
-                        {isPopoverOpen && (
-                          <div
-                            ref={popoverRef}
-                            className="absolute left-0 top-full mt-2 z-50 w-80 bg-palette-charcoal border border-palette-slate rounded-xl shadow-2xl p-3.5 text-xs text-palette-white animate-fade-in"
-                          >
-                            <div className="flex items-center justify-between pb-2 border-b border-palette-slate mb-2.5">
-                              <span className="font-semibold text-palette-white flex items-center space-x-1.5">
-                                <Layers className="w-3.5 h-3.5 text-palette-mint" />
-                                <span>Secret Reuse Detected</span>
-                              </span>
-                              <button
-                                onClick={() => setActiveReusePopover(null)}
-                                className="text-palette-moss hover:text-palette-white p-1 rounded transition"
+                        {isKeyCopied && (
+                          <Badge variant="accent" className="font-sans text-meta py-0">
+                            Copied
+                          </Badge>
+                        )}
+
+                        {hasReuse && (
+                          <div className="relative inline-block">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setActiveReusePopover(isPopoverOpen ? null : secret.key)
+                              }}
+                              className="focus:outline-none"
+                              title="Secret shared with other projects"
+                            >
+                              <Badge variant="warn" className="cursor-pointer gap-1 py-0">
+                                <AlertTriangle className="w-3 h-3 text-warn shrink-0" />
+                                <span>Reused ({secret.reusedIn!.length})</span>
+                              </Badge>
+                            </button>
+
+                            {/* Salted HMAC Reuse Popover */}
+                            {isPopoverOpen && (
+                              <div
+                                ref={popoverRef}
+                                className="absolute left-0 top-full mt-1.5 z-50 w-72 bg-surface border border-line rounded-panel shadow-lg p-3 text-meta text-fg animate-fade-in"
+                                onClick={(e) => e.stopPropagation()}
                               >
-                                <X className="w-3 h-3" />
-                              </button>
-                            </div>
-                            <p className="text-[11px] text-palette-stone mb-2 leading-relaxed">
-                              This exact secret value is also present in other tracked projects:
-                            </p>
-                            <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
-                              {secret.reusedIn!.map((ref: SecretReuseReference, idx: number) => (
-                                <div
-                                  key={idx}
-                                  className="p-2 rounded-lg bg-palette-navy border border-palette-slate text-[11px]"
-                                >
-                                  <div className="font-medium text-palette-white">{ref.projectName}</div>
-                                  <div className="font-mono text-[10px] text-palette-stone mt-0.5 truncate">
-                                    {ref.envFile} → <span className="text-palette-mint">{ref.keyName}</span>
-                                  </div>
+                                <div className="flex items-center justify-between pb-2 border-b border-line-subtle mb-2">
+                                  <span className="font-semibold text-fg">Secret Reuse Detected</span>
+                                  <IconButton
+                                    icon={<X className="w-3.5 h-3.5" />}
+                                    label="Close popover"
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => setActiveReusePopover(null)}
+                                  />
                                 </div>
-                              ))}
-                            </div>
-                            <div className="mt-2.5 pt-2 border-t border-palette-slate/60 text-[10px] text-palette-moss">
-                              🔒 Matched via salted HMAC hash. Zero plaintext leaked.
-                            </div>
+                                <p className="text-meta text-fg-muted mb-2 leading-relaxed">
+                                  This secret value matches across other tracked projects:
+                                </p>
+                                <div className="space-y-1 max-h-36 overflow-y-auto">
+                                  {secret.reusedIn!.map((ref: SecretReuseReference, idx: number) => (
+                                    <div
+                                      key={idx}
+                                      className="p-1.5 rounded-control bg-raised border border-line-subtle text-meta"
+                                    >
+                                      <div className="font-medium text-fg">{ref.projectName}</div>
+                                      <div className="font-mono text-fg-subtle truncate mt-0.5">
+                                        {ref.envFile} → {ref.keyName}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                                <div className="mt-2 pt-2 border-t border-line-subtle text-meta text-fg-subtle">
+                                  Salted HMAC match. Zero plaintext leaked.
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
-                    )}
-                  </div>
+                    </td>
 
-                  {/* Value and Inline Actions (Law of Proximity) */}
-                  <div className="flex items-center justify-between flex-1 min-w-0 pl-2 gap-3">
-                    <div className="truncate font-mono text-xs select-text min-w-0 flex-1">
-                      {isRevealed ? (
-                        <span className="bg-palette-charcoal px-2.5 py-1 rounded-md text-palette-mint border border-palette-slate inline-block max-w-full truncate">
-                          {secret.value}
-                        </span>
-                      ) : (
-                        <span className="text-palette-moss tracking-widest font-sans select-none text-xs">
-                          ••••••••••••••••••••••••
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Action Buttons */}
-                    <div className="flex items-center space-x-1.5 shrink-0">
-                      <button
-                        onClick={() => toggleReveal(secret.key)}
-                        className="p-1.5 text-palette-moss hover:text-palette-white hover:bg-palette-charcoal rounded-md transition"
-                        title={isRevealed ? 'Hide secret' : 'Reveal secret'}
-                      >
+                    {/* Value Column */}
+                    <td className="py-2.5 px-4 font-mono text-ui align-middle">
+                      <div className="truncate max-w-md select-text">
                         {isRevealed ? (
-                          <EyeOff className="w-4 h-4 text-palette-mint" />
+                          <span className="text-fg font-normal">{secret.value}</span>
                         ) : (
-                          <Eye className="w-4 h-4" />
+                          <span className="text-fg-subtle tracking-widest select-none">
+                            ••••••••••••••••••••
+                          </span>
                         )}
-                      </button>
+                      </div>
+                    </td>
 
-                      <button
-                        onClick={() => handleCopyValue(secret.key, secret.value)}
-                        className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-md transition text-xs font-medium ${
-                          isValCopied
-                            ? 'bg-palette-mint text-palette-void font-semibold shadow-sm'
-                            : 'bg-palette-charcoal hover:bg-palette-night border border-palette-slate text-palette-stone hover:text-palette-white'
-                        }`}
-                        title="Copy decrypted secret value"
-                      >
-                        {isValCopied ? (
-                          <>
-                            <Check className="w-3.5 h-3.5 text-palette-void" />
-                            <span>Copied</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-3.5 h-3.5 text-palette-moss" />
-                            <span>Copy</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+                    {/* Actions Column (Law of Proximity) */}
+                    <td className="py-2.5 px-6 text-right align-middle">
+                      <div className="flex items-center justify-end space-x-1">
+                        <IconButton
+                          icon={
+                            isRevealed ? (
+                              <EyeOff className="w-4 h-4 text-accent" />
+                            ) : (
+                              <Eye className="w-4 h-4" />
+                            )
+                          }
+                          label={isRevealed ? 'Hide secret' : 'Reveal secret'}
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => toggleReveal(secret.key)}
+                        />
+
+                        <Button
+                          size="sm"
+                          variant={isValCopied ? 'primary' : 'secondary'}
+                          onClick={() => handleCopyValue(secret.key, secret.value)}
+                          leftIcon={
+                            isValCopied ? (
+                              <Check className="w-3.5 h-3.5" />
+                            ) : (
+                              <Copy className="w-3.5 h-3.5 text-fg-subtle" />
+                            )
+                          }
+                          className="h-7 px-2 text-meta"
+                        >
+                          {isValCopied ? 'Copied' : 'Copy'}
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         )}
       </div>
     </div>

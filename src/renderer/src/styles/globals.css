@@ -2,7 +2,84 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Custom scrollbars */
+:root {
+  --canvas: #0B0B0C;
+  --surface: #111113;
+  --raised: #17171A;
+  --line-subtle: #232327;
+  --line: #2E2E33;
+  --line-strong: #3F3F46;
+  --fg: #ECECEE;
+  --fg-muted: #A1A1AA;
+  --fg-subtle: #8B8B94;
+  --accent: #6E9BFF;
+  --accent-hover: #5A8AF5;
+  --on-accent: #0B0B0C;
+  --danger: #F2686D;
+  --success: #4CC38A;
+  --warn: #F5A524;
+  color-scheme: dark;
+}
+
+:root[data-theme="dark"],
+html[data-theme="dark"],
+html.dark,
+.dark {
+  --canvas: #0B0B0C;
+  --surface: #111113;
+  --raised: #17171A;
+  --line-subtle: #232327;
+  --line: #2E2E33;
+  --line-strong: #3F3F46;
+  --fg: #ECECEE;
+  --fg-muted: #A1A1AA;
+  --fg-subtle: #8B8B94;
+  --accent: #6E9BFF;
+  --accent-hover: #5A8AF5;
+  --on-accent: #0B0B0C;
+  --danger: #F2686D;
+  --success: #4CC38A;
+  --warn: #F5A524;
+  color-scheme: dark;
+}
+
+:root[data-theme="light"],
+html[data-theme="light"],
+html.light,
+.light {
+  --canvas: #FAFAFA;
+  --surface: #FFFFFF;
+  --raised: #F4F4F5;
+  --line-subtle: #E4E4E7;
+  --line: #D4D4D8;
+  --line-strong: #A1A1AA;
+  --fg: #18181B;
+  --fg-muted: #52525B;
+  --fg-subtle: #6B6B74;
+  --accent: #2F5FD0;
+  --accent-hover: #2550B5;
+  --on-accent: #FFFFFF;
+  --danger: #CE2C31;
+  --success: #18794E;
+  --warn: #AD5700;
+  color-scheme: light;
+}
+
+/* Base typography and body reset */
+body {
+  font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  background-color: var(--canvas);
+  color: var(--fg);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+code, kbd, samp, pre {
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* Subtle, uncolored scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -13,20 +90,38 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(118, 230, 168, 0.15);
-  border-radius: 9999px;
+  background: var(--line);
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(118, 230, 168, 0.35);
+  background: var(--line-strong);
 }
 
-/* Custom transitions and utility animations */
+/* Accessible focus ring standards */
+*:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Titlebar drag regions for macOS */
 @layer utilities {
   .titlebar-drag-region {
     -webkit-app-region: drag;
   }
   .titlebar-no-drag {
     -webkit-app-region: no-drag;
+  }
+}
+
+/* Reduced motion accessibility */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

@@ -1,6 +1,5 @@
 # EnVault
 
-> **Delete the project. Keep the secrets.**  
 > A passive, encrypted, versioned backup system for environment configuration files. EnVault monitors your local projects in the background, preserves an encrypted audit history of every secret, and restores files automatically if lost, deleted, or corrupted -- with zero workflow disruption.
 
 ---
@@ -13,6 +12,19 @@ EnVault solves this problem locally and deterministically. It operates entirely 
 
 ---
 
+## Design System & Interface Philosophy
+
+EnVault follows an **Operate-mode** design philosophy based on the [Impeccable](https://impeccable.style/slop) anti-slop catalogue, [getdesign.md](https://getdesign.md/) specifications, [Laws of UI](https://www.uilaws.com/), and [Laws of UX](https://lawsofux.com/).
+
+- **Zero AI Slop**: Free of decorative glowing shadows, pulsing dots, bounce scale animations, glassmorphism, or marketing cards.
+- **Calm Ledger Aesthetic**: Neutral monochrome surface ladder (`canvas`, `surface`, `raised`, `line`, `fg`) accented by a single high-contrast blue signal (`#6E9BFF` dark / `#2F5FD0` light).
+- **Bundled Offline Typography**: Packaged IBM Plex Sans for interface text and IBM Plex Mono for secrets and hashes, completely offline with zero external network dependencies.
+- **Strict 12px Font Floor**: Eliminates unreadable micro-text, maintaining a strict 12px minimum across all metadata, badges, and labels.
+- **Theme Support**: Seamless System, Light, and Dark modes with instant toggle and Electron native chrome synchronization.
+- **WCAG AA Compliant**: All text and control contrast ratios exceed 4.5:1 (minimum 5.3:1 dark, 4.8:1 light).
+
+---
+
 ## Core Capabilities
 
 - **Automated Computer & Workspace Scanning**: Recursively scans development directories (such as `~/Projects`, `~/Developer`, `~/workspace`, `~/Code`) to discover projects and `.env` files, automatically ingesting and encrypting them with zero manual configuration.
@@ -21,17 +33,17 @@ EnVault solves this problem locally and deterministically. It operates entirely 
 - **Envelope Encryption**: Utilizes AES-256-GCM encryption with per-vault Data Encryption Keys (DEKs). Keys are protected at rest via the operating system keychain (macOS Keychain via Electron's `safeStorage`, with DPAPI on Windows and Secret Service on Linux).
 - **Salted HMAC Secret Reuse Detection**: Hashes secrets using a salted HMAC-SHA256 digest to detect duplicate secrets across different projects without exposing plaintext values across project boundaries.
 - **Atomic Restoration and Disaster Recovery**: Restores lost or overwritten `.env` files using atomic file system operations (`.tmp` write followed by `fsync` and atomic rename), guaranteeing zero file corruption.
-- **Version History Timeline & Diff Inspection**: Continuous visual timeline tracking every recorded snapshot with relative timestamps, variable count deltas, trigger sources (Auto-Watcher, Manual, Restore), and a visual diff viewer highlighting added, removed, and modified values.
-- **Human-Centered Interface Design**: Designed according to empirical Laws of UI and Laws of UX principles, featuring high-contrast typography, Fitts's Law hit targets, balanced confirmation dialogs, and a specialized dark color system.
-- **Raw Code Viewer**: Integrated code inspector with line number gutters, token syntax styling, and line/character count diagnostics.
+- **Table-First Secrets Inspector**: Tabular secrets grid with keyboard navigation (arrow keys, Enter to toggle reveal, 'c' to copy), and sticky headers.
+- **Version History Timeline & Diff Inspection**: Continuous hairline rail tracking every recorded snapshot with relative timestamps, variable counts, trigger sources, and visual diff comparisons.
+- **Global Command Palette**: Quick access to all projects, actions, view switches, and theme preferences via `Cmd+K` / `Ctrl+K`.
 - **Global Keyboard Navigation**:
-  - `Cmd+K` / `Ctrl+K`: Focus project search.
+  - `Cmd+K` / `Ctrl+K`: Open command palette and fuzzy search.
   - `Cmd+N` / `Ctrl+N`: Register new project directory.
   - `Shift+Cmd+S` / `Shift+Ctrl+S`: Initiate whole computer scan.
   - `Cmd+1` / `Ctrl+1`: Switch to Secrets table view.
   - `Cmd+2` / `Ctrl+2`: Switch to Raw file view.
   - `Cmd+3` / `Ctrl+3`: Switch to History timeline view.
-  - `Escape`: Dismiss modals, dialogs, and overlays.
+  - `Escape`: Dismiss modals, dialogs, and command palette.
 
 ---
 
@@ -98,16 +110,17 @@ npm install
 npm run dev
 ```
 
-### Running Test Suite
-
-Vitest runs using Electron's Node runtime to ensure compatibility with `better-sqlite3`:
+### Verification & Testing
 
 ```bash
-# Run full unit and integration test suite
-npm test
+# Run automated Anti-Slop design linter
+npm run lint:design
 
 # Run TypeScript strict type verification
 npm run typecheck
+
+# Run full unit and integration test suite
+npm test
 ```
 
 ### Production Build
@@ -130,6 +143,7 @@ npm run build:win
 - **Framework**: Electron 34
 - **Build Tooling**: electron-vite, Vite 6
 - **Frontend**: React 18, TypeScript, Tailwind CSS
+- **Typography**: IBM Plex Sans, IBM Plex Mono (bundled locally via Fontsource)
 - **Database**: SQLite 3 via `better-sqlite3`
 - **File Watching**: Chokidar
 - **Testing**: Vitest

@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow } from 'electron'
+import { app, shell, BrowserWindow, nativeTheme } from 'electron'
 import { join } from 'path'
 import { vaultDB } from './services/db'
 import { vaultCrypto } from './services/crypto'
@@ -17,7 +17,7 @@ function createWindow(): void {
     autoHideMenuBar: true,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     trafficLightPosition: { x: 16, y: 16 },
-    backgroundColor: '#030607',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0B0B0C' : '#FAFAFA',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: true,
@@ -40,6 +40,12 @@ function createWindow(): void {
   // Register IPC and Watcher listeners
   fileWatcherService.setMainWindow(mainWindow)
   registerIpcHandlers(mainWindow)
+
+  nativeTheme.on('updated', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.setBackgroundColor(nativeTheme.shouldUseDarkColors ? '#0B0B0C' : '#FAFAFA')
+    }
+  })
 
   if (process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])

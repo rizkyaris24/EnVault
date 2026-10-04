@@ -23,6 +23,9 @@ export const IPC_CHANNELS = {
   SECURITY_GET_STATUS: 'security:getStatus',
   SECURITY_GET_REUSE: 'security:getReuse',
 
+  // System & Theme
+  THEME_SET: 'theme:set',
+
   // Events (Main -> Renderer)
   EVENT_BACKUP_UPDATED: 'event:backupUpdated',
   EVENT_FILE_STATUS_CHANGED: 'event:fileStatusChanged',

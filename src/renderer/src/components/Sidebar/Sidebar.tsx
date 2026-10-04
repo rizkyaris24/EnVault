@@ -1,15 +1,20 @@
 import React, { useState } from 'react'
 import { Project, VaultStatus } from '@shared/types'
 import {
-  FolderLock,
   Plus,
   Search,
   Folder,
   AlertTriangle,
   Trash2,
   Lock,
-  Radar
+  Compass,
+  Sun,
+  Moon,
+  Monitor,
+  X
 } from 'lucide-react'
+import { Button, IconButton, Kbd, Badge } from '../ui'
+import { useTheme } from '../../theme/useTheme'
 
 interface SidebarProps {
   projects: Project[]
@@ -19,6 +24,7 @@ interface SidebarProps {
   onAddProject: () => void
   onScanComputer: () => void
   onDeleteProject: (id: string, name: string) => void
+  onOpenCommandPalette?: () => void
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -28,9 +34,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSelectProject,
   onAddProject,
   onScanComputer,
-  onDeleteProject
+  onDeleteProject,
+  onOpenCommandPalette
 }) => {
   const [searchQuery, setSearchQuery] = useState('')
+  const { theme, setTheme } = useTheme()
 
   const filteredProjects = projects.filter(
     (p) =>
@@ -39,95 +47,93 @@ export const Sidebar: React.FC<SidebarProps> = ({
   )
 
   return (
-    <div className="w-72 bg-palette-deep border-r border-palette-olive/50 flex flex-col h-full select-none text-palette-linen">
-      {/* Top title & drag region */}
-      <div className="titlebar-drag-region pt-8 pb-3 px-4 border-b border-palette-olive/40">
-        <div className="flex items-center space-x-2.5">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-palette-mint to-palette-teal flex items-center justify-center shadow-lg shadow-palette-mint/20">
-            <FolderLock className="w-4 h-4 text-palette-charcoal" />
+    <aside className="w-72 bg-surface border-r border-line flex flex-col h-full select-none text-fg">
+      {/* Top Titlebar Header */}
+      <div className="titlebar-drag-region pt-8 pb-3 px-4 border-b border-line-subtle">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <span className="text-title font-semibold text-fg tracking-tight">EnVault</span>
+            <Badge variant="default" className="text-meta">
+              v1.0
+            </Badge>
           </div>
-          <div>
-            <div className="font-bold text-sm tracking-tight flex items-center space-x-1.5">
-              <span>
-                <span className="text-palette-white">En</span>
-                <span className="text-palette-mint">Vault</span>
-              </span>
-              <span className="text-[10px] font-mono px-1.5 py-0.2 bg-palette-charcoal text-palette-mint rounded border border-palette-slate">
-                v1.0
-              </span>
-            </div>
-            <div className="text-[10px] text-palette-stone truncate">Passive .env backup</div>
-          </div>
+          <span className="text-meta text-fg-subtle">Passive Vault</span>
         </div>
       </div>
 
-      {/* Action Bar & Search */}
-      <div className="p-3 space-y-2 border-b border-palette-olive/40">
+      {/* Action Bar & Quick Search */}
+      <div className="p-3 space-y-2.5 border-b border-line-subtle">
         <div className="grid grid-cols-2 gap-2">
-          <button
+          <Button
+            size="sm"
+            variant="primary"
             onClick={onAddProject}
-            className="flex items-center justify-center space-x-1.5 px-2.5 py-2 bg-palette-mint hover:bg-palette-teal text-palette-void rounded-lg text-xs font-semibold shadow-md shadow-palette-mint/15 transition active:scale-[0.98] group"
-            title="Add a project folder (⌘N)"
+            leftIcon={<Plus className="w-3.5 h-3.5" />}
+            title="Add a project folder (Cmd+N)"
           >
-            <Plus className="w-3.5 h-3.5 shrink-0" />
-            <span>Add Folder</span>
-          </button>
+            Add Folder
+          </Button>
 
-          <button
+          <Button
+            size="sm"
+            variant="secondary"
             onClick={onScanComputer}
-            className="flex items-center justify-center space-x-1.5 px-2.5 py-2 bg-palette-charcoal hover:bg-palette-night border border-palette-slate text-palette-white rounded-lg text-xs font-medium transition active:scale-[0.98]"
-            title="Scan whole computer for all .env files and auto-save (⇧⌘S)"
+            leftIcon={<Compass className="w-3.5 h-3.5 text-accent" />}
+            title="Scan computer for .env files (Shift+Cmd+S)"
           >
-            <Radar className="w-3.5 h-3.5 text-palette-mint shrink-0" />
-            <span>Scan PC</span>
-          </button>
+            Scan PC
+          </Button>
         </div>
 
-        {/* Search Input with Shortcut and Clear Button */}
-        <div className="relative flex items-center">
-          <Search className="w-3.5 h-3.5 text-palette-moss absolute left-2.5 pointer-events-none" />
+        {/* Search Input with Keyboard Shortcut and Instant Clear */}
+        <div className="relative flex items-center w-full">
+          <Search className="w-3.5 h-3.5 text-fg-subtle absolute left-2.5 pointer-events-none" />
           <input
             type="text"
-            placeholder="Search projects... (⌘K)"
+            placeholder="Search projects..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-palette-navy border border-palette-slate rounded-lg pl-8 pr-8 py-1.5 text-xs text-palette-white placeholder-palette-moss focus:outline-none focus:border-palette-mint transition"
+            className="w-full h-8 bg-raised text-fg placeholder:text-fg-subtle border border-line rounded-control pl-8 pr-12 text-meta focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors"
           />
           {searchQuery ? (
             <button
+              type="button"
               onClick={() => setSearchQuery('')}
-              className="absolute right-2 p-1 text-palette-moss hover:text-palette-white rounded transition text-xs"
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 m-0 border-0 bg-transparent text-fg-subtle hover:text-fg rounded-chip transition-colors flex items-center justify-center focus:outline-none"
               title="Clear search"
             >
-              ✕
+              <X className="w-3.5 h-3.5" />
             </button>
           ) : (
-            <span className="absolute right-2.5 text-[10px] font-mono text-palette-moss pointer-events-none px-1 rounded bg-palette-charcoal/80 border border-palette-slate/60">
-              ⌘K
-            </span>
+            <button
+              type="button"
+              onClick={onOpenCommandPalette}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-0 m-0 border-0 bg-transparent flex items-center justify-center hover:opacity-80 focus:outline-none"
+              title="Open command palette (Cmd+K)"
+            >
+              <Kbd shortcut="⌘K" />
+            </button>
           )}
         </div>
       </div>
 
-      {/* Project List Section Header */}
-      <div className="px-3 pt-2 pb-1 flex items-center justify-between text-[10px] font-medium uppercase tracking-wider text-palette-moss">
+      {/* Section Header */}
+      <div className="px-3 pt-2.5 pb-1 flex items-center justify-between text-meta font-medium text-fg-subtle">
         <span>Tracked Projects</span>
-        <span className="font-mono bg-palette-charcoal px-1.5 py-0.2 rounded text-palette-stone border border-palette-slate/40">
-          {projects.length}
-        </span>
+        <span className="font-mono text-meta text-fg-subtle">{projects.length}</span>
       </div>
 
       {/* Project List */}
-      <div className="flex-1 overflow-y-auto p-2 space-y-1">
+      <div className="flex-1 overflow-y-auto px-2 py-1 space-y-0.5">
         {filteredProjects.length === 0 ? (
           <div className="py-12 px-4 text-center">
-            <Folder className="w-8 h-8 text-palette-olive mx-auto mb-2 opacity-60" />
-            <p className="text-xs font-medium text-palette-stone">
+            <Folder className="w-7 h-7 text-fg-subtle mx-auto mb-2 opacity-40" />
+            <p className="text-ui font-medium text-fg-muted">
               {projects.length === 0 ? 'No projects registered' : 'No matching projects'}
             </p>
-            <p className="text-[11px] text-palette-moss mt-1 max-w-[200px] mx-auto">
+            <p className="text-meta text-fg-subtle mt-1 max-w-[200px] mx-auto">
               {projects.length === 0
-                ? 'Click "Add Folder" or "Scan PC" to start passive encrypted backup.'
+                ? 'Add a project folder or scan your computer to start passive backup.'
                 : `No projects found matching "${searchQuery}".`}
             </p>
           </div>
@@ -137,60 +143,69 @@ export const Sidebar: React.FC<SidebarProps> = ({
             return (
               <div
                 key={project.id}
+                role="button"
+                tabIndex={0}
                 onClick={() => onSelectProject(project.id)}
-                className={`group relative flex items-center justify-between pl-3.5 pr-2 py-2.5 rounded-lg text-xs cursor-pointer transition select-none ${
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    onSelectProject(project.id)
+                  }
+                }}
+                className={`group relative flex items-center justify-between px-2.5 py-1.5 rounded-control text-ui cursor-pointer transition-colors duration-150 select-none outline-none focus-visible:outline-2 focus-visible:outline-accent ${
                   isSelected
-                    ? 'bg-palette-charcoal text-palette-white font-medium shadow-sm border border-palette-slate before:absolute before:left-0 before:top-2 before:bottom-2 before:w-1 before:bg-palette-mint before:rounded-r'
-                    : 'text-palette-stone hover:bg-palette-surface/80 hover:text-palette-white border border-transparent'
+                    ? 'bg-raised text-fg font-medium border border-line'
+                    : 'text-fg-muted hover:bg-raised/60 hover:text-fg border border-transparent'
                 }`}
               >
-                <div className="flex items-start space-x-2.5 truncate flex-1 min-w-0 pr-2">
+                <div className="flex items-center space-x-2 truncate flex-1 min-w-0 pr-2">
                   <Folder
-                    className={`w-4 h-4 shrink-0 mt-0.5 transition-colors ${
-                      isSelected ? 'text-palette-mint' : 'text-palette-moss group-hover:text-palette-teal'
+                    className={`w-4 h-4 shrink-0 transition-colors ${
+                      isSelected ? 'text-accent' : 'text-fg-subtle group-hover:text-fg-muted'
                     }`}
                   />
                   <div className="truncate flex-1 min-w-0">
-                    <div className="truncate text-palette-white font-medium leading-snug">
+                    <div className="truncate text-ui font-medium leading-snug text-fg">
                       {project.name}
                     </div>
-                    <div className="truncate text-[10px] text-palette-moss font-mono mt-0.5 select-text">
+                    <div className="truncate text-meta text-fg-subtle font-mono select-text">
                       {project.path}
                     </div>
                   </div>
                 </div>
 
-                {/* Badges and indicators */}
+                {/* Metadata & Actions */}
                 <div className="flex items-center space-x-1 shrink-0">
                   {project.hasMissingFiles && (
                     <span
-                      title="One or more .env files are missing on disk!"
-                      className="p-1 rounded bg-amber-500/10 border border-amber-500/30 text-amber-400"
+                      title="Missing .env file on disk"
+                      className="text-danger flex items-center"
                     >
-                      <AlertTriangle className="w-3 h-3" />
+                      <AlertTriangle className="w-3.5 h-3.5" />
                     </span>
                   )}
                   {project.reuseWarningCount ? (
                     <span
-                      title={`${project.reuseWarningCount} secret(s) shared with other projects`}
-                      className="p-1 rounded bg-palette-charcoal border border-palette-mint/40 text-palette-mint"
+                      title={`${project.reuseWarningCount} secret(s) shared across projects`}
+                      className="text-warn flex items-center"
                     >
-                      <Lock className="w-3 h-3" />
+                      <Lock className="w-3.5 h-3.5" />
                     </span>
                   ) : null}
-                  <span className="text-[10px] font-mono px-1.5 py-0.5 bg-palette-navy text-palette-stone rounded border border-palette-slate/60">
+                  <span className="text-meta font-mono text-fg-subtle px-1.5 py-0.5 rounded-chip bg-surface border border-line-subtle">
                     {project.fileCount ?? 0}
                   </span>
-                  <button
+                  <IconButton
+                    icon={<Trash2 className="w-3.5 h-3.5" />}
+                    label={`Stop tracking ${project.name}`}
+                    size="sm"
+                    variant="danger"
                     onClick={(e) => {
                       e.stopPropagation()
                       onDeleteProject(project.id, project.name)
                     }}
-                    className="opacity-0 group-hover:opacity-100 w-7 h-7 flex items-center justify-center text-palette-moss hover:text-rose-400 hover:bg-rose-500/10 rounded-md transition"
-                    title={`Stop tracking ${project.name}`}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                    className="opacity-0 group-hover:opacity-100 transition-opacity"
+                  />
                 </div>
               </div>
             )
@@ -198,21 +213,53 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
       </div>
 
-      {/* Vault Status Footer */}
-      <div className="p-3 border-t border-palette-olive/40 bg-palette-deep">
-        <div className="flex items-center justify-between text-[11px]">
-          <div className="flex items-center space-x-2">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-palette-mint opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-palette-mint"></span>
-            </span>
-            <span className="font-medium text-palette-white">AES-256-GCM Vault</span>
-          </div>
-          <span className="text-[10px] font-mono text-palette-stone px-1.5 py-0.5 rounded bg-palette-charcoal border border-palette-slate">
-            {vaultStatus?.keySource === 'keychain' ? 'OS Keychain' : 'Local'}
+      {/* Vault Status & Theme Footer */}
+      <div className="p-3 border-t border-line-subtle bg-surface flex items-center justify-between">
+        <div className="flex items-center space-x-2 text-meta text-fg-muted">
+          <span className="w-2 h-2 rounded-full bg-success shrink-0" />
+          <span className="font-medium text-fg">AES-256-GCM</span>
+          <span className="text-fg-subtle font-mono">
+            {vaultStatus?.keySource === 'keychain' ? 'Keychain' : 'Local'}
           </span>
         </div>
+
+        {/* Theme Mode Segmented Toggle */}
+        <div className="flex items-center border border-line rounded-control p-0.5 bg-raised">
+          <button
+            type="button"
+            onClick={() => setTheme('light')}
+            className={`p-1 rounded-[3px] transition-colors ${
+              theme === 'light' ? 'bg-surface text-fg shadow-xs' : 'text-fg-subtle hover:text-fg'
+            }`}
+            title="Light mode"
+            aria-label="Light mode"
+          >
+            <Sun className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setTheme('dark')}
+            className={`p-1 rounded-[3px] transition-colors ${
+              theme === 'dark' ? 'bg-surface text-fg shadow-xs' : 'text-fg-subtle hover:text-fg'
+            }`}
+            title="Dark mode"
+            aria-label="Dark mode"
+          >
+            <Moon className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setTheme('system')}
+            className={`p-1 rounded-[3px] transition-colors ${
+              theme === 'system' ? 'bg-surface text-fg shadow-xs' : 'text-fg-subtle hover:text-fg'
+            }`}
+            title="System theme"
+            aria-label="System theme"
+          >
+            <Monitor className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
-    </div>
+    </aside>
   )
 }
