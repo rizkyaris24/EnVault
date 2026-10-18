@@ -54,15 +54,29 @@ try {
   const page = await waitForPage()
   check(!!page, 'window loaded from the packaged app')
   if (page) {
-    const r = await evaluate(
-      page.webSocketDebuggerUrl,
-      `(async () => {
-        const s = await window.envaultApi.security.getStatus()
-        const i = await window.envaultApi.app.getInfo()
-        return { state: s.data?.state, keySource: s.data?.keySource, version: i.data?.version,
-                 noNode: typeof require === 'undefined' && typeof process === 'undefined' }
-      })()`
-    )
+    // The window can appear a moment before the preload bridge and IPC answer, so retry until the app responds.
+    const probe = `(async () => {
+      if (!window.envaultApi) return { pending: 'preload bridge (window.envaultApi) not present yet' }
+      const s = await window.envaultApi.security.getStatus()
+      if (!s.success) return { pending: 'getStatus failed: ' + s.error }
+      const i = await window.envaultApi.app.getInfo()
+      return { state: s.data?.state, keySource: s.data?.keySource, version: i.data?.version,
+               noNode: typeof require === 'undefined' && typeof process === 'undefined' }
+    })()`
+    // The first launch of a freshly built binary can take a while on macOS, so wait generously and remember why not.
+    let r = null
+    let why = 'no reply'
+    for (let i = 0; i < 120 && !r?.state; i++) {
+      try {
+        r = await evaluate(page.webSocketDebuggerUrl, probe)
+        if (r?.pending) why = r.pending
+        else if (!r) why = 'evaluate returned nothing (page navigating or script error)'
+      } catch (err) {
+        why = `evaluate threw: ${err.message}`
+      }
+      if (!r?.state) await new Promise((res) => setTimeout(res, 1000))
+    }
+    if (!r?.state) console.log(`note: the app never became ready within 120s (last status: ${why})`)
     check(r?.state === 'ready', `vault opens (state: ${r?.state}, key: ${r?.keySource})`)
     check(r?.version === pkg.version, `version matches package.json (${r?.version})`)
     check(r?.noNode === true, 'renderer has no Node access')

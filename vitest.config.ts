@@ -2,6 +2,8 @@ import { defineConfig } from 'vitest/config'
 import { resolve } from 'path'
 
 export default defineConfig({
+  // Renderer component tests are .tsx files that opt in to happy-dom with a docblock.
+  esbuild: { jsx: 'automatic' },
   test: {
     pool: 'forks',
     teardownTimeout: 2000

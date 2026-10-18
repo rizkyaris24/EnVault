@@ -153,9 +153,10 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose,
               label="New recovery passphrase"
               actionLabel="Save passphrase"
               confirm
+              askCurrent={status.hasRecovery}
               onCancel={() => setPanel(null)}
-              onSubmit={async (p) => {
-                const res = await window.envaultApi.security.setPassphrase(p)
+              onSubmit={async (p, current) => {
+                const res = await window.envaultApi.security.setPassphrase(p, current)
                 if (!res.success) return res.error ?? 'Something went wrong.'
                 setPanel(null)
                 onVaultChanged()

@@ -1,6 +1,7 @@
+/** Electron 44 made the main-process clipboard Promise-based; older versions are synchronous. Both work. */
 export interface ClipboardLike {
-  readText(): string
-  writeText(text: string): void
+  readText(): string | Promise<string>
+  writeText(text: string): void | Promise<void>
 }
 
 /** Copies a secret and clears it after `ttlMs`, but only if it is still what is on the clipboard. */
@@ -8,24 +9,28 @@ export function createClipboardGuard(clipboard: ClipboardLike, ttlMs = 30_000) {
   let timer: ReturnType<typeof setTimeout> | null = null
   let pending: string | null = null
 
-  const clearIfStillCopied = (): void => {
+  const clearIfStillCopied = async (): Promise<void> => {
     timer = null
-    if (pending !== null && clipboard.readText() === pending) clipboard.writeText('')
+    const secret = pending
     pending = null
+    if (secret !== null && (await clipboard.readText()) === secret) await clipboard.writeText('')
   }
 
   return {
-    copySecret(text: string): void {
-      clipboard.writeText(text)
+    async copySecret(text: string): Promise<void> {
+      await clipboard.writeText(text)
       if (timer) clearTimeout(timer)
       pending = text
-      timer = setTimeout(clearIfStillCopied, ttlMs)
+      timer = setTimeout(() => void clearIfStillCopied(), ttlMs)
       timer.unref?.()
     },
+    hasPending(): boolean {
+      return pending !== null
+    },
     /** Clears right now (used on quit so a secret never outlives the app). */
-    flush(): void {
+    async flush(): Promise<void> {
       if (timer) clearTimeout(timer)
-      clearIfStillCopied()
+      await clearIfStillCopied()
     }
   }
 }

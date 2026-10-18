@@ -22,6 +22,7 @@ export function discoverEnvFiles(projectDir: string): DiscoveredEnvFile[] {
         const fullPath = path.join(projectDir, entry.name)
         try {
           const stats = fs.statSync(fullPath)
+          if (stats.size > 1024 * 1024) continue // not a real env file, and reading it would stall the main thread
           const content = fs.readFileSync(fullPath, 'utf8')
           const lineCount = content.split(/\r?\n/).filter((l) => l.trim().length > 0).length
 

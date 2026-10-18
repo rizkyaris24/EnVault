@@ -14,6 +14,11 @@ directories:
 files:
   - out/**/*
   - package.json
+  # better-sqlite3 13 ships binaries for every platform plus the SQLite source; keep only what a Mac build can load.
+  - "!node_modules/better-sqlite3/deps/**"
+  - "!node_modules/better-sqlite3/src/**"
+  - "!node_modules/better-sqlite3/prebuilds/linux*"
+  - "!node_modules/better-sqlite3/prebuilds/win32*"
 
 asar: true
 asarUnpack:

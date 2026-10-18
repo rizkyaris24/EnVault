@@ -50,6 +50,12 @@ describe('resolveInside', () => {
     expect(() => resolveInside(root, '.env')).toThrow(/symlink/i)
   })
 
+  it('rejects a path that goes through a symlinked parent directory pointing outside', () => {
+    fs.mkdirSync(path.join(outside, 'app'))
+    fs.symlinkSync(outside, path.join(root, 'link'))
+    expect(() => resolveInside(root, 'link/app/.env')).toThrow(/escapes/i)
+  })
+
   it('rejects when the root itself has been swapped for a symlink to elsewhere', () => {
     const linkRoot = path.join(path.dirname(root), 'link')
     fs.symlinkSync(outside, linkRoot)

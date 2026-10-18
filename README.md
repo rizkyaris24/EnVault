@@ -14,7 +14,7 @@ EnVault solves this problem locally and deterministically. It operates entirely 
 
 ## Install
 
-Download the latest `.dmg` from the EnVault website, open it, and drag EnVault to Applications. Requires macOS on Apple Silicon or Intel. Releases are signed and notarized, and update themselves (you can turn that off in Settings).
+Download the latest `.dmg` from the EnVault website, open it, and drag EnVault to Applications. Requires macOS 13 or later, on Apple Silicon or Intel. Releases are signed and notarized, and update themselves (you can turn that off in Settings).
 
 On first launch EnVault asks you to set a **recovery passphrase**. Keep it somewhere safe: if your keychain is reset or you move to a new Mac, it is the only way to open your backups.
 
@@ -129,7 +129,7 @@ Releasing is described in [docs/RELEASING.md](docs/RELEASING.md). macOS only for
 
 ## Tech Stack
 
-- **Framework**: Electron 34
+- **Framework**: Electron 44
 - **Build Tooling**: electron-vite, Vite 6
 - **Frontend**: React 18, TypeScript, Tailwind CSS
 - **Typography**: Geist Sans, Geist Mono (bundled locally via Fontsource)

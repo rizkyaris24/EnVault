@@ -17,6 +17,8 @@ Repository secrets (Settings > Secrets and variables > Actions):
 
 Enable **Security > Private vulnerability reporting** on the repository (see `SECURITY.md`).
 
+Create a **`release` environment** (Settings > Environments) and add yourself as a required reviewer. The build job runs in it, so signing only happens after you approve. Move the six secrets above into that environment (environment secrets are not exposed to other workflows). Workflow actions are pinned to commit SHAs; update them deliberately (`gh api repos/<action>/commits/<tag> -q .sha`).
+
 ## Cutting a release
 
 1. Update `CHANGELOG.md` and bump `version` in `package.json` (`npm version 1.0.0 --no-git-tag-version`).
@@ -25,6 +27,10 @@ Enable **Security > Private vulnerability reporting** on the repository (see `SE
 4. The workflow tests, builds arm64 and x64, signs, notarizes, verifies (`codesign`, `spctl`, `stapler`), smoke-tests the app, and drafts a GitHub release with the artifacts.
 5. Upload to the update server, **zips and `latest-mac.yml` last**: copy `*.dmg`, `*.zip`, `*.blockmap`, then `latest-mac.yml` into the folder `ENVAULT_UPDATE_URL` points to. Publishing `latest-mac.yml` is what makes installed apps see the update.
 6. Publish the download page link to the `.dmg` and the SHA-256 (`shasum -a 256 EnVault-*.dmg`).
+
+## Beta releases
+
+Use a prerelease version (`1.0.0-beta.1`). electron-builder then writes `beta-mac.yml` instead of `latest-mac.yml`, and builds with a prerelease version follow the beta channel, so stable users are never offered them. Upload beta files to the same update folder.
 
 ## Rollback
 
@@ -35,7 +41,11 @@ Delete or replace `latest-mac.yml` on the server with the previous version's fil
 - `npm run pack` builds an unsigned `.app` into `release/mac-arm64/` (no certificate needed).
 - `npm run smoke:packaged` launches it on a throwaway profile and checks the vault opens, the version matches, and the renderer has no Node access.
 
-- A dual-architecture build leaves the x64 copy of the native SQLite module in `node_modules`, which breaks `npm test` and `npm run dev` on Apple Silicon. `npm run build:mac` restores it automatically. If you run `electron-builder` by hand, finish with `npx electron-builder install-app-deps`.
+## Electron version policy
+
+Electron supports only its three newest major versions and ships a new major about every 8 weeks, so a given major has roughly 6 months of security fixes. EnVault is on **Electron 44** (supported until about March 2027). Plan to move up a major or two each quarter: bump `electron`, run `npm run typecheck && npm test && npm run pack && npm run smoke:packaged`, and read the Electron breaking-changes page for the APIs EnVault uses (clipboard, dialog, session, safeStorage, webContents navigation events). Check <https://releases.electronjs.org/schedule> before each release. Electron 44 requires **macOS 13 or later**; that minimum is written into the app, so older Macs cannot run it.
+
+`better-sqlite3` ships prebuilt binaries for every platform; `electron-builder.yml` excludes the ones a Mac build cannot load.
 
 ## Things that must not change after the first public release
 

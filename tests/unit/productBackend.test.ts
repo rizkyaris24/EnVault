@@ -133,3 +133,54 @@ describe('buildDiagnostics', () => {
     expect(text).toContain('Retention keep all')
   })
 })
+
+import { createAttemptLimiter } from '../../src/main/utils/attemptLimiter'
+import { isTrustedSenderUrl } from '../../src/main/ipc/validate'
+
+describe('diagnostics path scrubbing', () => {
+  it('removes filesystem paths from the log tail', () => {
+    const text = buildDiagnostics({
+      appVersion: '1.0.0', electron: '34', chrome: '132', platform: 'darwin', arch: 'arm64', osRelease: '24',
+      vaultState: 'ready', keySource: 'keychain', hasRecovery: true, schemaVersion: 2,
+      stats: { totalProjects: 1, totalFiles: 1, totalVersions: 1 }, retentionDays: '90', quitOnClose: '0',
+      logTail: '2026-10-18T10:00:00Z ERROR File watcher error for project p1 | EMFILE: too many open files, watch /Users/jane/Clients/Acme/.env\n' +
+        '2026-10-18T10:00:01Z INFO started'
+    })
+    expect(text).not.toContain('/Users/jane')
+    expect(text).not.toContain('Acme')
+    expect(text).toContain('<path>')
+    expect(text).toContain('INFO started')
+  })
+})
+
+describe('createAttemptLimiter', () => {
+  it('allows a few free attempts, then backs off exponentially, and resets on success', () => {
+    let now = 0
+    const lim = createAttemptLimiter({ freeAttempts: 3, baseDelayMs: 1000, maxDelayMs: 8000, now: () => now })
+    for (let i = 0; i < 3; i++) {
+      expect(lim.waitMs()).toBe(0)
+      lim.fail()
+    }
+    expect(lim.waitMs()).toBe(1000) // 4th failure state
+    now += 1000
+    expect(lim.waitMs()).toBe(0)
+    lim.fail()
+    expect(lim.waitMs()).toBe(2000)
+    now += 2000
+    lim.fail()
+    now += 1
+    expect(lim.waitMs()).toBe(3999)
+    now += 4000
+    lim.fail(); lim.fail(); lim.fail()
+    expect(lim.waitMs()).toBeLessThanOrEqual(8000)
+    lim.succeed()
+    expect(lim.waitMs()).toBe(0)
+  })
+})
+
+describe('isTrustedSenderUrl robustness', () => {
+  it('does not throw on a malformed dev URL and then trusts nothing but file pages', () => {
+    expect(isTrustedSenderUrl('http://localhost:5173/', 'not a url')).toBe(false)
+    expect(isTrustedSenderUrl('file:///app/index.html', 'not a url')).toBe(true)
+  })
+})

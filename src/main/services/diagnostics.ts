@@ -17,7 +17,9 @@ export interface DiagnosticsInput {
 
 /** A support bundle users can paste into an issue. Counts and settings only: no names, paths, or values. */
 export function buildDiagnostics(d: DiagnosticsInput): string {
-  const lastLines = d.logTail.split('\n').filter(Boolean).slice(-60).join('\n')
+  // Log lines can carry paths from OS errors; strip them so the "no paths" promise holds.
+  const scrubbed = d.logTail.replace(/(?:\/[^\s/|,;:'"()]+){2,}/g, '<path>')
+  const lastLines = scrubbed.split('\n').filter(Boolean).slice(-60).join('\n')
   return [
     `EnVault ${d.appVersion}`,
     `Electron ${d.electron}, Chrome ${d.chrome}`,
