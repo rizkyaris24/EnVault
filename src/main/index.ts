@@ -1,9 +1,11 @@
-import { app, shell, dialog, BrowserWindow, nativeTheme } from 'electron'
+import { app, shell, dialog, session, BrowserWindow, nativeTheme } from 'electron'
 import { join } from 'path'
 import { vaultDB, VaultCorruptError } from './services/db'
 import { vaultCrypto, electronKeyStore } from './services/crypto'
 import { fileWatcherService } from './services/watcher'
-import { registerIpcHandlers } from './ipc/handlers'
+import { registerIpcHandlers, secretClipboard } from './ipc/handlers'
+import { isSameAppPage } from './ipc/validate'
+import { getLogger } from './utils/logger'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -22,7 +24,8 @@ function createWindow(): void {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: true,
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      devTools: !app.isPackaged
     }
   })
 
@@ -61,12 +64,39 @@ function startVaultServices(): void {
   try {
     vaultDB.pruneAllVersions()
   } catch (err) {
-    console.error('Version retention failed:', err)
+    getLogger().error('Version retention failed', err)
   }
   fileWatcherService.initAllWatchers()
 }
 
-app.whenReady().then(() => {
+function focusMainWindow(): void {
+  if (!mainWindow) return
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.focus()
+}
+
+process.on('uncaughtException', (err) => getLogger().error('Uncaught exception', err))
+process.on('unhandledRejection', (reason) => getLogger().error('Unhandled rejection', reason))
+
+app.on('web-contents-created', (_event, contents) => {
+  // The window only ever shows our own page; block any other navigation and all webviews.
+  contents.on('will-navigate', (event, url) => {
+    if (!isSameAppPage(url, contents.getURL())) event.preventDefault()
+  })
+  contents.on('will-attach-webview', (event) => event.preventDefault())
+})
+
+const gotSingleInstanceLock = app.requestSingleInstanceLock()
+if (!gotSingleInstanceLock) {
+  app.quit()
+} else {
+  app.on('second-instance', focusMainWindow)
+}
+
+if (gotSingleInstanceLock) app.whenReady().then(() => {
+  session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(false))
+  session.defaultSession.setPermissionCheckHandler(() => false)
+
   try {
     vaultDB.init()
     vaultCrypto.initialize(
@@ -78,6 +108,7 @@ app.whenReady().then(() => {
       electronKeyStore()
     )
   } catch (err) {
+    getLogger().error('Vault failed to open', err)
     const hint =
       err instanceof VaultCorruptError
         ? ''
@@ -94,6 +125,7 @@ app.whenReady().then(() => {
 
   createWindow()
   if (vaultCrypto.isReady()) startVaultServices()
+  getLogger().info(`EnVault ${app.getVersion()} started, vault ${vaultCrypto.getState()}`)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -106,6 +138,7 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
+  secretClipboard.flush()
   fileWatcherService.closeAll()
   vaultDB.close()
 })

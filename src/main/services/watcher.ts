@@ -5,6 +5,7 @@ import { BrowserWindow } from 'electron'
 import { vaultDB } from './db'
 import { backupService } from './backupService'
 import { IPC_CHANNELS } from '../../shared/ipcChannels'
+import { getLogger } from '../utils/logger'
 
 export class FileWatcherService {
   private watchers = new Map<string, FSWatcher>()
@@ -90,7 +91,7 @@ export class FileWatcherService {
     watcher.on('unlink', (filePath) => this.handleFileEvent(projectId, projectDir, filePath, 'unlink'))
     // An unhandled watcher error (EMFILE, EPERM, folder removed) would otherwise crash the main process.
     watcher.on('error', (err) => {
-      console.error(`File watcher error for project ${projectId}:`, err)
+      getLogger().error(`File watcher error for project ${projectId}`, err)
       this.unwatchProject(projectId)
       this.pendingProjects.set(projectId, projectDir)
       this.startRetryTimer()
@@ -184,7 +185,7 @@ export class FileWatcherService {
         }
       }
     } catch (err) {
-      console.error(`Error during watcher backup of ${fileName}:`, err)
+      getLogger().error(`Watcher backup failed for ${fileName}`, err)
     }
   }
 
