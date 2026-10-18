@@ -7,6 +7,8 @@ import { registerIpcHandlers, secretClipboard } from './ipc/handlers'
 import { isSameAppPage } from './ipc/validate'
 import { getLogger } from './utils/logger'
 import { installAppMenu } from './menu'
+import { autoUpdater } from 'electron-updater'
+import { createUpdater, UpdaterLike } from './updater'
 import { IPC_CHANNELS } from '../shared/ipcChannels'
 import { loadWindowState, saveWindowState, fitToDisplays, MIN_WIDTH, MIN_HEIGHT } from './utils/windowState'
 
@@ -89,6 +91,19 @@ function startVaultServices(): void {
   fileWatcherService.initAllWatchers()
 }
 
+const updates = createUpdater({
+  updater: autoUpdater as unknown as UpdaterLike,
+  isPackaged: app.isPackaged,
+  // Automatic checks are the only background network use; users can turn them off in Settings.
+  enabled: () => vaultDB.getMeta('auto_update') !== '0',
+  onStatus: (status) => {
+    if (status.state === 'ready' || status.state === 'error') {
+      getLogger().info(`Update ${status.state}${status.version ? ' ' + status.version : ''}${status.message ? ': ' + status.message : ''}`)
+    }
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(IPC_CHANNELS.EVENT_UPDATE_STATUS, status)
+  }
+})
+
 function focusMainWindow(): void {
   if (!mainWindow) return
   if (mainWindow.isMinimized()) mainWindow.restore()
@@ -152,12 +167,14 @@ if (gotSingleInstanceLock) app.whenReady().then(() => {
 
   registerIpcHandlers({
     getWindow: () => mainWindow,
+    updates,
     onVaultReady: startVaultServices
   })
 
   createWindow()
   if (vaultCrypto.isReady()) startVaultServices()
   getLogger().info(`EnVault ${app.getVersion()} started, vault ${vaultCrypto.getState()}`)
+  updates.startAutoChecks()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -170,6 +187,7 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
+  updates.stop()
   secretClipboard.flush()
   fileWatcherService.closeAll()
   vaultDB.close()

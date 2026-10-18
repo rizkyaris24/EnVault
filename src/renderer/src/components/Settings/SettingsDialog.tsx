@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react'
-import { AppInfo, VaultStatus } from '@shared/types'
+import { AppInfo, UpdateStatus, VaultStatus } from '@shared/types'
 import { Dialog, Button } from '../ui'
 import { PassphraseForm } from '../Vault/PassphraseForm'
 import { useTheme, ThemePreference } from '../../theme/useTheme'
@@ -63,22 +63,47 @@ const Switch: React.FC<{ checked: boolean; onChange: (v: boolean) => void; label
 
 type Panel = null | 'recovery' | 'export' | 'import'
 
+function updateLabel(u: UpdateStatus): string {
+  switch (u.state) {
+    case 'checking':
+      return 'Checking for updates...'
+    case 'downloading':
+      return `Downloading version ${u.version}...`
+    case 'ready':
+      return `Version ${u.version} is ready`
+    case 'none':
+      return 'EnVault is up to date'
+    case 'error':
+      return `Could not check: ${u.message ?? 'unknown error'}`
+    case 'disabled':
+      return u.message ?? 'Updates are off'
+    default:
+      return 'Check for updates'
+  }
+}
+
 export const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose, status, onVaultChanged, notify }) => {
   const { theme, setTheme } = useTheme()
   const [info, setInfo] = useState<AppInfo | null>(null)
   const [retention, setRetention] = useState('90')
   const [quitOnClose, setQuitOnClose] = useState(false)
   const [panel, setPanel] = useState<Panel>(null)
+  const [autoUpdate, setAutoUpdate] = useState(true)
+  const [update, setUpdate] = useState<UpdateStatus>({ state: 'idle' })
 
   const load = useCallback(async () => {
-    const [i, r, q] = await Promise.all([
+    const [i, r, q, a, u] = await Promise.all([
       window.envaultApi.app.getInfo(),
       window.envaultApi.settings.get('retention_days'),
-      window.envaultApi.settings.get('quit_on_close')
+      window.envaultApi.settings.get('quit_on_close'),
+      window.envaultApi.settings.get('auto_update'),
+      window.envaultApi.updates.getStatus()
     ])
     if (i.success && i.data) setInfo(i.data)
     setRetention(r.data ?? '90')
     setQuitOnClose(q.data === '1')
+    setAutoUpdate(a.data !== '0')
+    if (u.success && u.data) setUpdate(u.data)
   }, [])
 
   useEffect(() => {
@@ -87,6 +112,8 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose,
       load()
     }
   }, [isOpen, load])
+
+  useEffect(() => (isOpen ? window.envaultApi.onUpdateStatus(setUpdate) : undefined), [isOpen])
 
   if (!isOpen) return null
 
@@ -226,6 +253,38 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose,
               />
             </Row>
           )}
+        </Section>
+
+        <Section title="Updates">
+          <Row label={updateLabel(update)} hint="EnVault contacts the update server only to look for new versions.">
+            {update.state === 'ready' ? (
+              <Button size="sm" variant="primary" onClick={() => window.envaultApi.updates.install()}>
+                Restart to update
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={update.state === 'checking' || update.state === 'downloading' || update.state === 'disabled'}
+                onClick={async () => {
+                  const res = await window.envaultApi.updates.check()
+                  if (res.success && res.data) setUpdate(res.data)
+                }}
+              >
+                Check now
+              </Button>
+            )}
+          </Row>
+          <Row label="Check automatically" hint="Looks a few seconds after launch and every 6 hours.">
+            <Switch
+              label="Check for updates automatically"
+              checked={autoUpdate}
+              onChange={(on) => {
+                setAutoUpdate(on)
+                save('auto_update', on ? '1' : '0')
+              }}
+            />
+          </Row>
         </Section>
 
         <Section title="Appearance">

@@ -125,3 +125,9 @@ export interface AppInfo {
   vaultPath: string
   logPath: string
 }
+
+export interface UpdateStatus {
+  state: 'idle' | 'disabled' | 'checking' | 'downloading' | 'ready' | 'none' | 'error'
+  version?: string
+  message?: string
+}

@@ -34,6 +34,11 @@ export const IPC_CHANNELS = {
   VAULT_EXPORT: 'vault:export',
   VAULT_IMPORT: 'vault:import',
 
+  // Updates
+  UPDATE_GET_STATUS: 'update:getStatus',
+  UPDATE_CHECK: 'update:check',
+  UPDATE_INSTALL: 'update:install',
+
   // Clipboard
   CLIPBOARD_COPY_SECRET: 'clipboard:copySecret',
 
@@ -44,5 +49,6 @@ export const IPC_CHANNELS = {
   EVENT_BACKUP_UPDATED: 'event:backupUpdated',
   EVENT_FILE_STATUS_CHANGED: 'event:fileStatusChanged',
   EVENT_SCAN_PROGRESS: 'event:scanProgress',
-  EVENT_OPEN_SETTINGS: 'event:openSettings'
+  EVENT_OPEN_SETTINGS: 'event:openSettings',
+  EVENT_UPDATE_STATUS: 'event:updateStatus'
 } as const

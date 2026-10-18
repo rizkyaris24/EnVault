@@ -58,7 +58,8 @@ export function isSameAppPage(url: string, loadedUrl: string): boolean {
 const SETTINGS: Record<string, (v: string) => boolean> = {
   onboarding_done: (v) => v === '1',
   retention_days: (v) => ['30', '90', '365', '0'].includes(v),
-  quit_on_close: (v) => v === '0' || v === '1'
+  quit_on_close: (v) => v === '0' || v === '1',
+  auto_update: (v) => v === '0' || v === '1'
 }
 
 /** Only these UI settings can be written from the renderer; key material and anything else is rejected. */

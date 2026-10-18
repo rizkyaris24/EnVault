@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint:design
+      # The test script runs Vitest inside Electron so better-sqlite3 loads with the right ABI.
+      - run: npm test
+      - name: Build an unsigned app and smoke-test it
+        run: |
+          npm run pack
+          npm run smoke:packaged

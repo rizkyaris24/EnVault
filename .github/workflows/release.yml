@@ -1,0 +1,53 @@
+name: Release
+
+# Push a tag like v1.0.0 (it must match package.json) to build, sign, notarize and draft a release.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Tag must match package.json
+        run: test "v$(node -p "require('./package.json').version")" = "${GITHUB_REF_NAME}"
+
+      - run: npm run typecheck
+      - run: npm run lint:design
+      - run: npm test
+
+      - name: Build, sign and notarize
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          ENVAULT_UPDATE_URL: ${{ secrets.ENVAULT_UPDATE_URL }}
+        run: npm run build:mac
+
+      - name: Verify signature, notarization and launch
+        run: |
+          APP=release/mac-arm64/EnVault.app
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          spctl -a -t exec -vv "$APP"
+          xcrun stapler validate "$APP"
+          npm run smoke:packaged -- "$APP"
+
+      - name: Draft GitHub release with the artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --draft --title "EnVault ${GITHUB_REF_NAME#v}" \
+            --notes "See CHANGELOG.md. Copy the .dmg, .zip, .blockmap and latest-mac.yml files to the update server (docs/RELEASING.md)." \
+            release/*.dmg release/*.zip release/*.blockmap release/latest-mac.yml

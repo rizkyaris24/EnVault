@@ -138,6 +138,16 @@ export const App: React.FC = () => {
 
   useEffect(() => window.envaultApi.onOpenSettings(() => setIsSettingsOpen(true)), [])
 
+  useEffect(
+    () =>
+      window.envaultApi.onUpdateStatus((status) => {
+        if (status.state === 'ready') {
+          addToast('info', 'Update ready', `EnVault ${status.version} installs when you quit, or restart from Settings.`)
+        }
+      }),
+    []
+  )
+
   useEffect(() => {
     loadProjects()
 
