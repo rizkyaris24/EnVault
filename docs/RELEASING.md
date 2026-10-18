@@ -41,7 +41,11 @@ Delete or replace `latest-mac.yml` on the server with the previous version's fil
 - `npm run pack` builds an unsigned `.app` into `release/mac-arm64/` (no certificate needed).
 - `npm run smoke:packaged` launches it on a throwaway profile and checks the vault opens, the version matches, and the renderer has no Node access.
 
-- A dual-architecture build leaves the x64 copy of the native SQLite module in `node_modules`, which breaks `npm test` and `npm run dev` on Apple Silicon. `npm run build:mac` restores it automatically. If you run `electron-builder` by hand, finish with `npx electron-builder install-app-deps`.
+## Electron version policy
+
+Electron supports only its three newest major versions and ships a new major about every 8 weeks, so a given major has roughly 6 months of security fixes. EnVault is on **Electron 44** (supported until about March 2027). Plan to move up a major or two each quarter: bump `electron`, run `npm run typecheck && npm test && npm run pack && npm run smoke:packaged`, and read the Electron breaking-changes page for the APIs EnVault uses (clipboard, dialog, session, safeStorage, webContents navigation events). Check <https://releases.electronjs.org/schedule> before each release. Electron 44 requires **macOS 13 or later**; that minimum is written into the app, so older Macs cannot run it.
+
+`better-sqlite3` ships prebuilt binaries for every platform; `electron-builder.yml` excludes the ones a Mac build cannot load.
 
 ## Things that must not change after the first public release
 

@@ -42,57 +42,74 @@ describe('logger', () => {
 describe('clipboard guard', () => {
   afterEach(() => vi.useRealTimers())
 
-  function fakeClipboard() {
+  /** Sync clipboard (as older Electron) or Promise-based (Electron 44+). */
+  function fakeClipboard(asyncApi = false) {
     let value = ''
-    return { readText: () => value, writeText: (t: string) => void (value = t), get value() { return value } }
+    const wrap = <T,>(v: T): T | Promise<T> => (asyncApi ? Promise.resolve(v) : v)
+    return {
+      readText: () => wrap(value),
+      writeText: (t: string) => {
+        value = t
+        return wrap(undefined as void)
+      },
+      get value() {
+        return value
+      }
+    }
   }
 
-  it('clears a copied secret after the timeout if it is still on the clipboard', () => {
-    vi.useFakeTimers()
-    const cb = fakeClipboard()
-    const guard = createClipboardGuard(cb, 30_000)
-    guard.copySecret('s3cret')
-    expect(cb.value).toBe('s3cret')
-    vi.advanceTimersByTime(29_999)
-    expect(cb.value).toBe('s3cret')
-    vi.advanceTimersByTime(2)
-    expect(cb.value).toBe('')
-  })
+  for (const asyncApi of [false, true]) {
+    describe(asyncApi ? 'with the Promise-based Electron 44 API' : 'with a synchronous API', () => {
+      it('clears a copied secret after the timeout if it is still on the clipboard', async () => {
+        vi.useFakeTimers()
+        const cb = fakeClipboard(asyncApi)
+        const guard = createClipboardGuard(cb, 30_000)
+        await guard.copySecret('s3cret')
+        expect(cb.value).toBe('s3cret')
+        await vi.advanceTimersByTimeAsync(29_999)
+        expect(cb.value).toBe('s3cret')
+        await vi.advanceTimersByTimeAsync(2)
+        expect(cb.value).toBe('')
+      })
 
-  it('does not clear something the user copied afterwards', () => {
-    vi.useFakeTimers()
-    const cb = fakeClipboard()
-    const guard = createClipboardGuard(cb, 30_000)
-    guard.copySecret('s3cret')
-    cb.writeText('something else')
-    vi.advanceTimersByTime(31_000)
-    expect(cb.value).toBe('something else')
-  })
+      it('does not clear something the user copied afterwards', async () => {
+        vi.useFakeTimers()
+        const cb = fakeClipboard(asyncApi)
+        const guard = createClipboardGuard(cb, 30_000)
+        await guard.copySecret('s3cret')
+        await cb.writeText('something else')
+        await vi.advanceTimersByTimeAsync(31_000)
+        expect(cb.value).toBe('something else')
+      })
 
-  it('flush clears a pending secret immediately but leaves other content alone', () => {
-    vi.useFakeTimers()
-    const cb = fakeClipboard()
-    const guard = createClipboardGuard(cb, 30_000)
-    guard.copySecret('s3cret')
-    guard.flush()
-    expect(cb.value).toBe('')
-    cb.writeText('unrelated')
-    guard.flush()
-    expect(cb.value).toBe('unrelated')
-  })
+      it('flush clears a pending secret immediately but leaves other content alone', async () => {
+        vi.useFakeTimers()
+        const cb = fakeClipboard(asyncApi)
+        const guard = createClipboardGuard(cb, 30_000)
+        await guard.copySecret('s3cret')
+        expect(guard.hasPending()).toBe(true)
+        await guard.flush()
+        expect(cb.value).toBe('')
+        expect(guard.hasPending()).toBe(false)
+        await cb.writeText('unrelated')
+        await guard.flush()
+        expect(cb.value).toBe('unrelated')
+      })
 
-  it('restarts the countdown on a new copy', () => {
-    vi.useFakeTimers()
-    const cb = fakeClipboard()
-    const guard = createClipboardGuard(cb, 30_000)
-    guard.copySecret('one')
-    vi.advanceTimersByTime(20_000)
-    guard.copySecret('two')
-    vi.advanceTimersByTime(20_000)
-    expect(cb.value).toBe('two')
-    vi.advanceTimersByTime(11_000)
-    expect(cb.value).toBe('')
-  })
+      it('restarts the countdown on a new copy', async () => {
+        vi.useFakeTimers()
+        const cb = fakeClipboard(asyncApi)
+        const guard = createClipboardGuard(cb, 30_000)
+        await guard.copySecret('one')
+        await vi.advanceTimersByTimeAsync(20_000)
+        await guard.copySecret('two')
+        await vi.advanceTimersByTimeAsync(20_000)
+        expect(cb.value).toBe('two')
+        await vi.advanceTimersByTimeAsync(11_000)
+        expect(cb.value).toBe('')
+      })
+    })
+  }
 })
 
 describe('isSameAppPage', () => {

@@ -19,9 +19,9 @@ An independent read-only review of the code (threat model: compromised renderer,
 | 14 | Diagnostics could contain paths | Paths are scrubbed from the log tail |
 | 8 (part) | GCM tag/IV lengths not pinned | Tag fixed to 16 bytes, IV to 12, enforced on decrypt and unwrap |
 
-## Open: decide before launch
+## Fixed after the review
 
-- **#4 Electron 34 is out of support** (unpatched Chromium/V8 fixes). Mitigated by loading only local content, but a public release should move to a supported major. This is a full re-test (native module rebuild, fuses, smoke test, updater), so it is its own task.
+- **#4 Electron 34 was out of support.** Upgraded to Electron 44.9.0 (with `better-sqlite3` 13 and electron-builder 26). The main-process clipboard became asynchronous in Electron 44, so the clipboard auto-clear was reworked and quitting now waits for it. Navigation block, permission denial, single-instance lock, fuses, ASAR integrity, packaged smoke test and the dual-architecture build were re-verified. See "Electron version policy" in `docs/RELEASING.md` for keeping up.
 
 ## Open: documented trade-offs
 

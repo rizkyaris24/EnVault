@@ -21,7 +21,7 @@ Launch dev or packaged builds with `--user-data-dir=/tmp/envault-qa --remote-deb
 
 | Area | Matrix |
 | :-- | :-- |
-| macOS versions | 13, 14, 15 and the newest release |
+| macOS versions | 13 (the minimum for Electron 44), 14, 15 and the newest release |
 | Hardware | Apple Silicon and one real Intel Mac (or Rosetta for a smoke test) |
 | Install | Fresh install from the notarized dmg; upgrade from the previous release through the in-app updater |
 | Keychain | Locked, denied access, reset; moving the vault to a new Mac via Export and Import |

@@ -407,9 +407,9 @@ export function registerIpcHandlers({ getWindow, updates, onVaultReady }: Handle
   handle(IPC_CHANNELS.UPDATE_INSTALL, () => updates.install(), { allowLocked: true })
 
   // Clipboard: copy a secret and auto-clear it
-  handle(IPC_CHANNELS.CLIPBOARD_COPY_SECRET, (_e, text: unknown) => {
+  handle(IPC_CHANNELS.CLIPBOARD_COPY_SECRET, async (_e, text: unknown) => {
     if (typeof text !== 'string' || text.length > 2 * 1024 * 1024) throw new Error('Invalid text')
-    secretClipboard.copySecret(text)
+    await secretClipboard.copySecret(text)
   })
 
   // Theme: Set

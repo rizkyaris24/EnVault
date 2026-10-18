@@ -186,12 +186,23 @@ if (gotSingleInstanceLock) app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   // The DB and watchers stay open on macOS so reopening the window works; before-quit does the cleanup.
+  // During a quit the database is already closed, so do not read settings from it.
+  if (isQuitting) return
   if (process.platform !== 'darwin' || vaultDB.getMeta('quit_on_close') === '1') app.quit()
 })
 
-app.on('before-quit', () => {
+let clipboardFlushed = false
+let isQuitting = false
+app.on('before-quit', (event) => {
+  // The clipboard clear is asynchronous in Electron 44+, so hold the quit until it has finished.
+  if (!clipboardFlushed && secretClipboard.hasPending()) {
+    event.preventDefault()
+    clipboardFlushed = true
+    void secretClipboard.flush().finally(() => app.quit())
+    return
+  }
+  isQuitting = true
   updates.stop()
-  secretClipboard.flush()
   fileWatcherService.closeAll()
   vaultDB.close()
 })
