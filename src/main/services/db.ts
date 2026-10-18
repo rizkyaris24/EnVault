@@ -89,10 +89,18 @@ export class VaultDB {
     this.client.exec(schema)
   }
 
+  public runInTransaction<T>(fn: () => T): T {
+    return this.client.transaction(fn)()
+  }
+
   // Meta
   public getMeta(key: string): string | null {
     const row = this.client.prepare('SELECT value FROM vault_meta WHERE key = ?').get(key) as { value: string } | undefined
     return row ? row.value : null
+  }
+
+  public deleteMeta(key: string): void {
+    this.client.prepare('DELETE FROM vault_meta WHERE key = ?').run(key)
   }
 
   public setMeta(key: string, value: string): void {

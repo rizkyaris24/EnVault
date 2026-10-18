@@ -1,10 +1,10 @@
 import * as fs from 'fs'
-import * as path from 'path'
 import * as crypto from 'crypto'
 import { vaultDB } from './db'
 import { vaultCrypto } from './crypto'
 import { parseEnv } from './envParser'
 import { EnvVersion, EnvFile } from '../../shared/types'
+import { resolveInside } from '../utils/safePath'
 
 export class BackupService {
   /**
@@ -17,7 +17,7 @@ export class BackupService {
     source: 'watch' | 'manual' | 'restore' = 'watch',
     note?: string
   ): { version: EnvVersion; skippedDuplicate: boolean } | null {
-    const fullPath = path.join(projectPath, file.relativePath)
+    const fullPath = resolveInside(projectPath, file.relativePath)
 
     if (!fs.existsSync(fullPath)) {
       return null
@@ -51,8 +51,6 @@ export class BackupService {
       createdAt: Date.now()
     }
 
-    vaultDB.createVersion(newVersion)
-
     // Index secret hashes for cross-project reuse detection
     const secretHashes: Array<{ keyName: string; valueHash: string }> = []
     for (const [key, value] of Object.entries(parsed.entries)) {
@@ -62,9 +60,13 @@ export class BackupService {
       }
     }
 
-    if (secretHashes.length > 0) {
-      vaultDB.indexSecretHashes(newVersion.id, file.projectId, file.id, secretHashes)
-    }
+    // One transaction: a version never exists without its reuse index.
+    vaultDB.runInTransaction(() => {
+      vaultDB.createVersion(newVersion)
+      if (secretHashes.length > 0) {
+        vaultDB.indexSecretHashes(newVersion.id, file.projectId, file.id, secretHashes)
+      }
+    })
 
     return { version: newVersion, skippedDuplicate: false }
   }

@@ -7,8 +7,10 @@ import {
   DiscoveredEnvFile,
   DiffResult,
   ComputerScanSummary,
-  ScanProgressPayload
+  ScanProgressPayload,
+  VaultStatus
 } from '@shared/types'
+import { UnlockScreen } from './components/Vault/UnlockScreen'
 import { TopBar } from './components/TopBar/TopBar'
 import { ProjectsHome } from './components/Home/ProjectsHome'
 import { ProjectHeader } from './components/ProjectDetail/ProjectHeader'
@@ -29,6 +31,7 @@ export const App: React.FC = () => {
   // Global State
   const [projects, setProjects] = useState<Project[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
+  const [vaultStatus, setVaultStatus] = useState<VaultStatus | null>(null)
   const [toasts, setToasts] = useState<ToastMessage[]>([])
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false)
 
@@ -109,6 +112,15 @@ export const App: React.FC = () => {
       setProjects(res.data)
     }
   }, [])
+
+  const refreshVaultStatus = useCallback(async (): Promise<void> => {
+    const res = await window.envaultApi.security.getStatus()
+    if (res.success && res.data) setVaultStatus(res.data)
+  }, [])
+
+  useEffect(() => {
+    refreshVaultStatus()
+  }, [refreshVaultStatus])
 
   useEffect(() => {
     loadProjects()
@@ -435,6 +447,19 @@ export const App: React.FC = () => {
 
   const selectedProject = projects.find((p) => p.id === selectedProjectId)
   const selectedFile = files.find((f) => f.id === selectedFileId)
+
+  if (!vaultStatus) return <div className="h-screen w-screen bg-canvas" />
+  if (vaultStatus.state !== 'ready') {
+    return (
+      <UnlockScreen
+        status={vaultStatus}
+        onDone={() => {
+          refreshVaultStatus()
+          loadProjects()
+        }}
+      />
+    )
+  }
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-canvas text-fg font-sans select-none">

@@ -7,66 +7,200 @@ export interface EncryptedPayload {
   authTag: string
 }
 
+export interface MetaStore {
+  get(key: string): string | null
+  set(key: string, value: string): void
+  delete(key: string): void
+}
+
+/** The OS keychain, abstracted so key handling is testable without Electron. */
+export interface KeyStore {
+  isAvailable(): boolean
+  wrap(hex: string): string
+  unwrap(base64: string): string
+}
+
+export type VaultState = 'ready' | 'locked' | 'needs-passphrase-setup'
+export type KeySource = 'keychain' | 'passphrase'
+
+const MIN_PASSPHRASE_LENGTH = 10
+const SCRYPT = { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 }
+
+/** Electron safeStorage as a KeyStore. On Linux, `basic_text` is not real encryption, so it counts as unavailable. */
+export function electronKeyStore(): KeyStore {
+  return {
+    isAvailable: () => {
+      if (typeof safeStorage === 'undefined' || !safeStorage.isEncryptionAvailable()) return false
+      if (process.platform === 'linux' && safeStorage.getSelectedStorageBackend?.() === 'basic_text') return false
+      return true
+    },
+    wrap: (hex) => safeStorage.encryptString(hex).toString('base64'),
+    unwrap: (b64) => safeStorage.decryptString(Buffer.from(b64, 'base64'))
+  }
+}
+
 export class VaultCrypto {
   private dek: Buffer | null = null
+  private pendingDek: Buffer | null = null
   private pepper: string = ''
+  private meta: MetaStore | null = null
+  private keystore: KeyStore | null = null
+  private state: VaultState = 'locked'
+  private keySource: KeySource = 'keychain'
 
   /**
-   * Initializes the crypto service.
-   * Retrieves or creates the Data Encryption Key (DEK) and HMAC pepper.
+   * Loads or creates the vault key (DEK).
+   * The DEK is wrapped by the OS keychain; an optional passphrase wrapping is the recovery and fallback path.
+   * Throws when the key cannot be recovered (keychain unusable and no recovery passphrase was ever set).
    */
-  public initialize(
-    storedEncryptedDek: string | null,
-    storedPepper: string | null,
-    saveMetaCallback: (key: string, value: string) => void
-  ): { keySource: 'keychain' | 'password' } {
-    let keySource: 'keychain' | 'password' = 'keychain'
+  public initialize(meta: MetaStore, keystore: KeyStore): { state: VaultState; keySource: KeySource } {
+    this.meta = meta
+    this.keystore = keystore
+    this.dek = null
+    this.pendingDek = null
 
-    // 1. Initialize or load pepper
-    if (storedPepper) {
-      this.pepper = storedPepper
-    } else {
-      this.pepper = crypto.randomBytes(32).toString('hex')
-      saveMetaCallback('vault_pepper', this.pepper)
+    const keychainBlob = meta.get('encrypted_dek')
+    const hasPassphraseWrap = meta.get('dek_wrap_pass') !== null
+    const keychainOk = keystore.isAvailable()
+
+    if (!keychainBlob && !hasPassphraseWrap) {
+      // First run: generate a new 256-bit DEK.
+      const dek = crypto.randomBytes(32)
+      if (keychainOk) {
+        meta.set('encrypted_dek', keystore.wrap(dek.toString('hex')))
+        this.dek = dek
+        this.keySource = 'keychain'
+        this.finalize()
+        return { state: this.state, keySource: this.keySource }
+      }
+      this.pendingDek = dek
+      this.state = 'needs-passphrase-setup'
+      this.keySource = 'passphrase'
+      return { state: this.state, keySource: this.keySource }
     }
 
-    // 2. Check safeStorage availability
-    const isSafeStorageAvailable = typeof safeStorage !== 'undefined' && safeStorage.isEncryptionAvailable()
-
-    if (storedEncryptedDek) {
-      if (isSafeStorageAvailable) {
-        try {
-          const decryptedHex = safeStorage.decryptString(Buffer.from(storedEncryptedDek, 'base64'))
-          this.dek = Buffer.from(decryptedHex, 'hex')
-          keySource = 'keychain'
-        } catch (err) {
-          // If safeStorage fails to decrypt (e.g. moved machine or headless), throw
-          throw new Error(`Failed to decrypt master vault key from OS keychain: ${(err as Error).message}`)
+    if (keychainBlob && keychainOk) {
+      try {
+        this.dek = Buffer.from(keystore.unwrap(keychainBlob), 'hex')
+        this.keySource = 'keychain'
+        this.finalize()
+        return { state: this.state, keySource: this.keySource }
+      } catch (err) {
+        if (!hasPassphraseWrap) {
+          throw new Error(
+            `Cannot decrypt the vault key from the OS keychain and no recovery passphrase was set: ${(err as Error).message}`
+          )
         }
-      } else {
-        // Fallback for headless environments
-        this.dek = crypto.scryptSync(storedEncryptedDek, 'envault_salt', 32)
-        keySource = 'password'
       }
-    } else {
-      // First run: generate new 256-bit DEK
-      const newDek = crypto.randomBytes(32)
-      this.dek = newDek
-
-      if (isSafeStorageAvailable) {
-        const encrypted = safeStorage.encryptString(newDek.toString('hex'))
-        saveMetaCallback('encrypted_dek', encrypted.toString('base64'))
-        keySource = 'keychain'
-      } else {
-        // Fallback placeholder
-        const fallbackSeed = crypto.randomBytes(32).toString('hex')
-        saveMetaCallback('encrypted_dek', fallbackSeed)
-        this.dek = crypto.scryptSync(fallbackSeed, 'envault_salt', 32)
-        keySource = 'password'
-      }
+    } else if (!hasPassphraseWrap) {
+      throw new Error('The OS keychain is unavailable and no recovery passphrase was set for this vault.')
     }
 
-    return { keySource }
+    this.state = 'locked'
+    this.keySource = 'passphrase'
+    return { state: this.state, keySource: this.keySource }
+  }
+
+  public getState(): VaultState {
+    return this.state
+  }
+
+  public getKeySource(): KeySource {
+    return this.keySource
+  }
+
+  public isReady(): boolean {
+    return this.state === 'ready'
+  }
+
+  public hasRecovery(): boolean {
+    return this.meta?.get('dek_wrap_pass') != null
+  }
+
+  /**
+   * Sets the user passphrase: the master password when no keychain exists, or the recovery passphrase otherwise.
+   * Allowed when the vault is waiting for its first passphrase or is already unlocked.
+   */
+  public setPassphrase(passphrase: string): void {
+    this.assertPassphrase(passphrase)
+    const dek = this.dek ?? this.pendingDek
+    if (!this.meta || !dek || (this.state !== 'ready' && this.state !== 'needs-passphrase-setup')) {
+      throw new Error('Vault is not ready to set a passphrase')
+    }
+    this.meta.set('dek_wrap_pass', this.wrapWithPassphrase(dek, passphrase))
+    if (this.state === 'needs-passphrase-setup') {
+      this.dek = dek
+      this.pendingDek = null
+      this.keySource = 'passphrase'
+      this.finalize()
+    }
+  }
+
+  /** Unlocks a locked vault with the passphrase, and re-wraps the key into the keychain when one is available. */
+  public unlock(passphrase: string): void {
+    if (!this.meta || !this.keystore || this.state !== 'locked') {
+      throw new Error('Vault is not locked')
+    }
+    const wrapped = this.meta.get('dek_wrap_pass')
+    if (!wrapped) throw new Error('No recovery passphrase is set for this vault')
+
+    let dek: Buffer
+    try {
+      dek = this.unwrapWithPassphrase(wrapped, passphrase)
+    } catch {
+      throw new Error('Incorrect passphrase')
+    }
+
+    this.dek = dek
+    if (this.keystore.isAvailable()) {
+      this.meta.set('encrypted_dek', this.keystore.wrap(dek.toString('hex')))
+      this.keySource = 'keychain'
+    }
+    this.finalize()
+  }
+
+  private assertPassphrase(passphrase: string): void {
+    if (typeof passphrase !== 'string' || passphrase.length < MIN_PASSPHRASE_LENGTH) {
+      throw new Error(`Passphrase must be at least ${MIN_PASSPHRASE_LENGTH} characters`)
+    }
+  }
+
+  private wrapWithPassphrase(dek: Buffer, passphrase: string): string {
+    const salt = crypto.randomBytes(16)
+    const iv = crypto.randomBytes(12)
+    const key = crypto.scryptSync(passphrase, salt, 32, SCRYPT)
+    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv)
+    const ct = Buffer.concat([cipher.update(dek), cipher.final()])
+    return JSON.stringify({
+      v: 1,
+      salt: salt.toString('base64'),
+      iv: iv.toString('base64'),
+      tag: cipher.getAuthTag().toString('base64'),
+      ct: ct.toString('base64')
+    })
+  }
+
+  private unwrapWithPassphrase(blob: string, passphrase: string): Buffer {
+    const w = JSON.parse(blob) as { salt: string; iv: string; tag: string; ct: string }
+    const key = crypto.scryptSync(passphrase, Buffer.from(w.salt, 'base64'), 32, SCRYPT)
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(w.iv, 'base64'))
+    decipher.setAuthTag(Buffer.from(w.tag, 'base64'))
+    return Buffer.concat([decipher.update(Buffer.from(w.ct, 'base64')), decipher.final()])
+  }
+
+  /** Loads (or creates) the HMAC pepper, stored encrypted under the DEK. Migrates the old plaintext pepper. */
+  private finalize(): void {
+    const meta = this.meta!
+    const enc = meta.get('vault_pepper_enc')
+    if (enc) {
+      this.pepper = this.decrypt(JSON.parse(enc))
+    } else {
+      const legacy = meta.get('vault_pepper')
+      this.pepper = legacy ?? crypto.randomBytes(32).toString('hex')
+      meta.set('vault_pepper_enc', JSON.stringify(this.encrypt(this.pepper)))
+      if (legacy) meta.delete('vault_pepper')
+    }
+    this.state = 'ready'
   }
 
   /**
@@ -75,6 +209,7 @@ export class VaultCrypto {
   public setTestKey(keyBuffer: Buffer, pepper: string = 'test-pepper'): void {
     this.dek = keyBuffer
     this.pepper = pepper
+    this.state = 'ready'
   }
 
   /**

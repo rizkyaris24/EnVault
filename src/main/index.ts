@@ -1,7 +1,7 @@
-import { app, shell, BrowserWindow, nativeTheme } from 'electron'
+import { app, shell, dialog, BrowserWindow, nativeTheme } from 'electron'
 import { join } from 'path'
 import { vaultDB } from './services/db'
-import { vaultCrypto } from './services/crypto'
+import { vaultCrypto, electronKeyStore } from './services/crypto'
 import { fileWatcherService } from './services/watcher'
 import { registerIpcHandlers } from './ipc/handlers'
 
@@ -33,19 +33,15 @@ function createWindow(): void {
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
+    if (details.url.startsWith('https://')) shell.openExternal(details.url)
     return { action: 'deny' }
   })
 
-  // Register IPC and Watcher listeners
-  fileWatcherService.setMainWindow(mainWindow)
-  registerIpcHandlers(mainWindow)
-
-  nativeTheme.on('updated', () => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.setBackgroundColor(nativeTheme.shouldUseDarkColors ? '#0B0B0C' : '#FFFFFF')
-    }
+  mainWindow.on('closed', () => {
+    mainWindow = null
+    fileWatcherService.setMainWindow(null)
   })
+  fileWatcherService.setMainWindow(mainWindow)
 
   if (process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
@@ -54,41 +50,48 @@ function createWindow(): void {
   }
 }
 
+nativeTheme.on('updated', () => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.setBackgroundColor(nativeTheme.shouldUseDarkColors ? '#0B0B0C' : '#FFFFFF')
+  }
+})
+
 app.whenReady().then(() => {
   try {
-    // 1. Initialize SQLite database
     vaultDB.init()
-
-    // 2. Initialize Crypto with Envelope Encryption
-    const storedDek = vaultDB.getMeta('encrypted_dek')
-    const storedPepper = vaultDB.getMeta('vault_pepper')
-
-    vaultCrypto.initialize(storedDek, storedPepper, (key, value) => {
-      vaultDB.setMeta(key, value)
-    })
-
-    // 3. Create GUI window
-    createWindow()
-
-    // 4. Start background watchers for all registered projects
-    fileWatcherService.initAllWatchers()
+    vaultCrypto.initialize(
+      {
+        get: (k) => vaultDB.getMeta(k),
+        set: (k, v) => vaultDB.setMeta(k, v),
+        delete: (k) => vaultDB.deleteMeta(k)
+      },
+      electronKeyStore()
+    )
   } catch (err) {
-    console.error('Failed to initialize EnVault core services:', err)
+    dialog.showErrorBox(
+      'EnVault cannot open your vault',
+      `${(err as Error).message}\n\nYour data has not been changed. If you set a recovery passphrase, reinstall or restore your keychain access and try again.`
+    )
+    app.quit()
+    return
   }
 
+  registerIpcHandlers({
+    getWindow: () => mainWindow,
+    onVaultReady: () => fileWatcherService.initAllWatchers()
+  })
+
+  createWindow()
+  if (vaultCrypto.isReady()) fileWatcherService.initAllWatchers()
+
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow()
-    }
+    if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
 })
 
 app.on('window-all-closed', () => {
-  fileWatcherService.closeAll()
-  vaultDB.close()
-  if (process.platform !== 'darwin') {
-    app.quit()
-  }
+  // The DB and watchers stay open on macOS so reopening the window works; before-quit does the cleanup.
+  if (process.platform !== 'darwin') app.quit()
 })
 
 app.on('before-quit', () => {
