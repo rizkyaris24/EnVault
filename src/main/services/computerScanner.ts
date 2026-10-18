@@ -113,20 +113,21 @@ function extractProjectName(dir: string): string {
 
 /**
  * Recursively scans directory for .env files, respecting ignored folders and max depth.
+ * Async so a large home folder never blocks the main process.
  */
-export function scanDirectoryForEnvFiles(
+export async function scanDirectoryForEnvFiles(
   rootDir: string,
   maxDepth: number = 6,
   onProgress?: (dir: string) => void
-): string[] {
+): Promise<string[]> {
   const foundEnvFiles: string[] = []
 
-  function walk(currentDir: string, currentDepth: number): void {
+  async function walk(currentDir: string, currentDepth: number): Promise<void> {
     if (currentDepth > maxDepth) return
 
     let entries: fs.Dirent[]
     try {
-      entries = fs.readdirSync(currentDir, { withFileTypes: true })
+      entries = await fs.promises.readdir(currentDir, { withFileTypes: true })
     } catch (_) {
       // Permission denied or locked directory
       return
@@ -144,8 +145,7 @@ export function scanDirectoryForEnvFiles(
         if (IGNORED_DIR_NAMES.has(lowerName)) continue
         if (entry.name.startsWith('.') && currentDepth > 0) continue
 
-        const nextDir = path.join(currentDir, entry.name)
-        walk(nextDir, currentDepth + 1)
+        await walk(path.join(currentDir, entry.name), currentDepth + 1)
       } else if (entry.isFile()) {
         if (entry.name.startsWith('.env')) {
           foundEnvFiles.push(path.join(currentDir, entry.name))
@@ -154,7 +154,7 @@ export function scanDirectoryForEnvFiles(
     }
   }
 
-  walk(rootDir, 0)
+  await walk(rootDir, 0)
   return foundEnvFiles
 }
 
@@ -193,7 +193,7 @@ export async function scanComputerAndAutoSave(options?: ScanOptions): Promise<Co
 
   // Perform discovery across candidate roots
   for (const root of existingRoots) {
-    const discovered = scanDirectoryForEnvFiles(root, options?.maxDepth ?? 5, (dir) => {
+    const discovered = await scanDirectoryForEnvFiles(root, options?.maxDepth ?? 5, (dir) => {
       scannedDirCount++
       if (options?.onProgress && scannedDirCount % 15 === 0) {
         options.onProgress({

@@ -1,6 +1,6 @@
 import { app, shell, dialog, BrowserWindow, nativeTheme } from 'electron'
 import { join } from 'path'
-import { vaultDB } from './services/db'
+import { vaultDB, VaultCorruptError } from './services/db'
 import { vaultCrypto, electronKeyStore } from './services/crypto'
 import { fileWatcherService } from './services/watcher'
 import { registerIpcHandlers } from './ipc/handlers'
@@ -56,6 +56,16 @@ nativeTheme.on('updated', () => {
   }
 })
 
+/** Runs once the vault key is available: apply retention, then start passive watching. */
+function startVaultServices(): void {
+  try {
+    vaultDB.pruneAllVersions()
+  } catch (err) {
+    console.error('Version retention failed:', err)
+  }
+  fileWatcherService.initAllWatchers()
+}
+
 app.whenReady().then(() => {
   try {
     vaultDB.init()
@@ -68,21 +78,22 @@ app.whenReady().then(() => {
       electronKeyStore()
     )
   } catch (err) {
-    dialog.showErrorBox(
-      'EnVault cannot open your vault',
-      `${(err as Error).message}\n\nYour data has not been changed. If you set a recovery passphrase, reinstall or restore your keychain access and try again.`
-    )
+    const hint =
+      err instanceof VaultCorruptError
+        ? ''
+        : '\n\nYour data has not been changed. If you set a recovery passphrase, restore your keychain access and try again.'
+    dialog.showErrorBox('EnVault cannot open your vault', `${(err as Error).message}${hint}`)
     app.quit()
     return
   }
 
   registerIpcHandlers({
     getWindow: () => mainWindow,
-    onVaultReady: () => fileWatcherService.initAllWatchers()
+    onVaultReady: startVaultServices
   })
 
   createWindow()
-  if (vaultCrypto.isReady()) fileWatcherService.initAllWatchers()
+  if (vaultCrypto.isReady()) startVaultServices()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
