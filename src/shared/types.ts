@@ -81,7 +81,9 @@ export interface DiffResult {
 
 export interface VaultStatus {
   isEncrypted: boolean
-  keySource: 'keychain' | 'password'
+  state: 'ready' | 'locked' | 'needs-passphrase-setup'
+  keySource: 'keychain' | 'passphrase'
+  hasRecovery: boolean
   totalProjects: number
   totalFiles: number
   totalVersions: number

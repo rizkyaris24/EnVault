@@ -11,6 +11,9 @@ export class FileWatcherService {
   private debounceTimers = new Map<string, NodeJS.Timeout>()
   private suppressedPaths = new Map<string, number>()
   private mainWindow: BrowserWindow | null = null
+  /** Projects whose folder was missing (unplugged drive, moved folder); retried until it reappears. */
+  private pendingProjects = new Map<string, string>()
+  private retryTimer: NodeJS.Timeout | null = null
 
   public setMainWindow(window: BrowserWindow | null): void {
     this.mainWindow = window
@@ -22,6 +25,10 @@ export class FileWatcherService {
   public suppressNextChangeEvent(filePath: string): void {
     const normalized = path.resolve(filePath)
     this.suppressedPaths.set(normalized, Date.now() + 3000) // suppress for 3s
+  }
+
+  public clearSuppression(filePath: string): void {
+    this.suppressedPaths.delete(path.resolve(filePath))
   }
 
   private isSuppressed(filePath: string): boolean {
@@ -57,8 +64,11 @@ export class FileWatcherService {
     }
 
     if (!fs.existsSync(projectDir)) {
+      this.pendingProjects.set(projectId, projectDir)
+      this.startRetryTimer()
       return
     }
+    this.pendingProjects.delete(projectId)
 
     const watcher = chokidar.watch(projectDir, {
       depth: 0,
@@ -78,11 +88,33 @@ export class FileWatcherService {
     watcher.on('add', (filePath) => this.handleFileEvent(projectId, projectDir, filePath, 'add'))
     watcher.on('change', (filePath) => this.handleFileEvent(projectId, projectDir, filePath, 'change'))
     watcher.on('unlink', (filePath) => this.handleFileEvent(projectId, projectDir, filePath, 'unlink'))
+    // An unhandled watcher error (EMFILE, EPERM, folder removed) would otherwise crash the main process.
+    watcher.on('error', (err) => {
+      console.error(`File watcher error for project ${projectId}:`, err)
+      this.unwatchProject(projectId)
+      this.pendingProjects.set(projectId, projectDir)
+      this.startRetryTimer()
+    })
 
     this.watchers.set(projectId, watcher)
   }
 
+  private startRetryTimer(): void {
+    if (this.retryTimer) return
+    this.retryTimer = setInterval(() => {
+      for (const [id, dir] of [...this.pendingProjects]) {
+        if (fs.existsSync(dir)) this.watchProject(id, dir)
+      }
+      if (this.pendingProjects.size === 0 && this.retryTimer) {
+        clearInterval(this.retryTimer)
+        this.retryTimer = null
+      }
+    }, 30_000)
+    this.retryTimer.unref?.()
+  }
+
   public unwatchProject(projectId: string): void {
+    this.pendingProjects.delete(projectId)
     const watcher = this.watchers.get(projectId)
     if (watcher) {
       watcher.close()
@@ -157,6 +189,11 @@ export class FileWatcherService {
   }
 
   public closeAll(): void {
+    if (this.retryTimer) {
+      clearInterval(this.retryTimer)
+      this.retryTimer = null
+    }
+    this.pendingProjects.clear()
     for (const watcher of this.watchers.values()) {
       watcher.close()
     }
