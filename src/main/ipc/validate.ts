@@ -43,3 +43,14 @@ export function isInside(parent: string, child: string): boolean {
   const rel = path.relative(path.resolve(parent), path.resolve(child))
   return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel))
 }
+
+/** Navigation is only allowed to the page the window already loaded (ignoring hash and query). */
+export function isSameAppPage(url: string, loadedUrl: string): boolean {
+  try {
+    const a = new URL(url)
+    const b = new URL(loadedUrl)
+    return a.protocol === b.protocol && a.host === b.host && a.pathname === b.pathname
+  } catch {
+    return false
+  }
+}

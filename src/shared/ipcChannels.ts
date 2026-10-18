@@ -25,6 +25,9 @@ export const IPC_CHANNELS = {
   VAULT_UNLOCK: 'vault:unlock',
   VAULT_SET_PASSPHRASE: 'vault:setPassphrase',
 
+  // Clipboard
+  CLIPBOARD_COPY_SECRET: 'clipboard:copySecret',
+
   // System & Theme
   THEME_SET: 'theme:set',
 

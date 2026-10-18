@@ -38,6 +38,9 @@ export interface EnVaultApi {
     unlock: (passphrase: string) => Promise<IPCResult>
     setPassphrase: (passphrase: string) => Promise<IPCResult>
   }
+  clipboard: {
+    copySecret: (text: string) => Promise<IPCResult>
+  }
   setTheme: (theme: 'system' | 'light' | 'dark') => Promise<IPCResult<boolean>>
   onBackupUpdated: (callback: (payload: { fileId: string; projectId: string; version: any }) => void) => () => void
   onFileStatusChanged: (callback: (payload: { fileId: string; projectId: string; existsOnDisk: boolean }) => void) => () => void
@@ -67,6 +70,9 @@ const api: EnVaultApi = {
     getReuse: (projectId) => ipcRenderer.invoke(IPC_CHANNELS.SECURITY_GET_REUSE, projectId),
     unlock: (passphrase) => ipcRenderer.invoke(IPC_CHANNELS.VAULT_UNLOCK, passphrase),
     setPassphrase: (passphrase) => ipcRenderer.invoke(IPC_CHANNELS.VAULT_SET_PASSPHRASE, passphrase)
+  },
+  clipboard: {
+    copySecret: (text) => ipcRenderer.invoke(IPC_CHANNELS.CLIPBOARD_COPY_SECRET, text)
   },
   setTheme: (theme) => ipcRenderer.invoke(IPC_CHANNELS.THEME_SET, theme),
   onBackupUpdated: (callback) => {

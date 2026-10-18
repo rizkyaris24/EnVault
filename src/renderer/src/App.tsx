@@ -517,8 +517,8 @@ export const App: React.FC = () => {
                   <SecretTable
                     secrets={secrets}
                     onCopySecret={(val, key) => {
-                      navigator.clipboard.writeText(val)
-                      addToast('info', 'Copied to Clipboard', `Copied secret ${key}`)
+                      window.envaultApi.clipboard.copySecret(val)
+                      addToast('info', 'Copied', `${key} copied. It clears from the clipboard in 30 seconds.`)
                     }}
                   />
                 )}
@@ -527,7 +527,7 @@ export const App: React.FC = () => {
                   <RawViewer
                     rawContent={rawContent}
                     onCopyAll={(content) => {
-                      navigator.clipboard.writeText(content)
+                      window.envaultApi.clipboard.copySecret(content)
                       addToast('info', 'Copied File', 'Copied full .env contents.')
                     }}
                   />

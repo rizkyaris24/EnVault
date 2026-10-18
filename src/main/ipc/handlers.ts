@@ -1,4 +1,4 @@
-import { ipcMain, dialog, shell, BrowserWindow, nativeTheme, IpcMainInvokeEvent } from 'electron'
+import { ipcMain, dialog, shell, clipboard, BrowserWindow, nativeTheme, IpcMainInvokeEvent } from 'electron'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as crypto from 'crypto'
@@ -12,8 +12,12 @@ import { restoreService } from '../services/restoreService'
 import { fileWatcherService } from '../services/watcher'
 import { computeEnvDiff } from '../services/diffService'
 import { parseEnv } from '../services/envParser'
+import { createClipboardGuard } from '../utils/clipboardGuard'
 import { isTrustedSenderUrl, isSafeId, parseTheme, parseAddPayload, isInside } from './validate'
 import { SecretEntry, IPCResult, Project, EnvFile, ComputerScanSummary, VaultStatus } from '../../shared/types'
+
+/** Secrets copied from the UI are cleared from the clipboard after 30 seconds. */
+export const secretClipboard = createClipboardGuard(clipboard, 30_000)
 
 export interface HandlerDeps {
   getWindow: () => BrowserWindow | null
@@ -253,6 +257,12 @@ export function registerIpcHandlers({ getWindow, onVaultReady }: HandlerDeps): v
     },
     { allowLocked: true }
   )
+
+  // Clipboard: copy a secret and auto-clear it
+  handle(IPC_CHANNELS.CLIPBOARD_COPY_SECRET, (_e, text: unknown) => {
+    if (typeof text !== 'string' || text.length > 2 * 1024 * 1024) throw new Error('Invalid text')
+    secretClipboard.copySecret(text)
+  })
 
   // Theme: Set
   handle(IPC_CHANNELS.THEME_SET, (_e, raw: unknown): boolean => {
