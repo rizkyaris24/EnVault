@@ -1,0 +1,44 @@
+# macOS-only for v1. Signing and notarization read these environment variables in CI:
+#   CSC_LINK, CSC_KEY_PASSWORD            Developer ID Application certificate (.p12, base64)
+#   APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID   notarization
+#   ENVAULT_UPDATE_URL                    https:// folder where latest-mac.yml and the zips are hosted
+# appId must not change after the first public release (updates and keychain access depend on it).
+appId: com.rizkyamanatama.envault
+productName: EnVault
+copyright: Copyright (c) 2026 Rizky Amanatama
+
+directories:
+  buildResources: build-resources
+  output: release
+
+files:
+  - out/**/*
+  - package.json
+
+asar: true
+asarUnpack:
+  - "**/node_modules/better-sqlite3/**/*.node"
+npmRebuild: true
+afterPack: scripts/afterPack.cjs
+
+mac:
+  category: public.app-category.developer-tools
+  icon: build-resources/icon.icns
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+    - target: zip
+      arch: [arm64, x64]
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build-resources/entitlements.mac.plist
+  entitlementsInherit: build-resources/entitlements.mac.plist
+  notarize: true
+
+dmg:
+  title: EnVault ${version}
+
+# Self-hosted update feed. electron-updater reads this at runtime; it must be https.
+publish:
+  provider: generic
+  url: ${env.ENVAULT_UPDATE_URL}

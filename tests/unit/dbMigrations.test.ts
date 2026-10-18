@@ -3,7 +3,7 @@ import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
 import Database from 'better-sqlite3'
-import { VaultDB, LATEST_SCHEMA_VERSION } from '../../src/main/services/db'
+import { VaultDB, LATEST_SCHEMA_VERSION, isCorruptionError } from '../../src/main/services/db'
 
 const LEGACY_SCHEMA = `
   CREATE TABLE vault_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -175,5 +175,17 @@ describe('VaultDB retention and reuse counts', () => {
     expect(counts.get('p')).toBe(Object.keys(db.getReusedSecretsForProject('p')).length)
     expect(counts.get('q')).toBe(Object.keys(db.getReusedSecretsForProject('q')).length)
     expect(counts.get('p')).toBe(1)
+  })
+})
+
+describe('isCorruptionError', () => {
+  it('flags real SQLite corruption but not environment problems', () => {
+    expect(isCorruptionError(Object.assign(new Error('file is not a database'), { code: 'SQLITE_NOTADB' }))).toBe(true)
+    expect(isCorruptionError(Object.assign(new Error('malformed'), { code: 'SQLITE_CORRUPT' }))).toBe(true)
+    expect(isCorruptionError(new Error('quick_check failed'))).toBe(true)
+    // native module built for the wrong architecture or ABI: not a damaged vault
+    expect(isCorruptionError(new Error("dlopen(...better_sqlite3.node): incompatible architecture (have 'x86_64')"))).toBe(false)
+    expect(isCorruptionError(Object.assign(new Error('permission denied'), { code: 'EACCES' }))).toBe(false)
+    expect(isCorruptionError(Object.assign(new Error('database is locked'), { code: 'SQLITE_BUSY' }))).toBe(false)
   })
 })

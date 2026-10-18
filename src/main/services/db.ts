@@ -24,6 +24,14 @@ const TABLE_COLUMNS: Record<string, string[]> = {
 
 export class VaultCorruptError extends Error {}
 
+const QUICK_CHECK_FAILED = 'quick_check failed'
+
+/** True only for genuine database corruption; a missing or mismatched native module, permissions or a lock are not. */
+export function isCorruptionError(err: unknown): boolean {
+  const e = err as { code?: string; message?: string }
+  return e?.code === 'SQLITE_NOTADB' || e?.code === 'SQLITE_CORRUPT' || e?.message === QUICK_CHECK_FAILED
+}
+
 export class VaultDB {
   private db: Database.Database | null = null
   private dbFile: string | null = null
@@ -41,9 +49,10 @@ export class VaultDB {
       db = new Database(finalPath)
       if (existed && db.pragma('quick_check', { simple: true }) !== 'ok') {
         db.close()
-        throw new Error('quick_check failed')
+        throw new Error(QUICK_CHECK_FAILED)
       }
     } catch (err) {
+      if (!isCorruptionError(err)) throw err
       throw new VaultCorruptError(
         `The vault database is damaged (${(err as Error).message}). Nothing was changed. ` +
           `If an automatic copy exists next to it (envault.db.bak-v*), you can restore from that.`

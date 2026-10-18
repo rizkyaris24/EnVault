@@ -11,6 +11,8 @@ describe('parseSetting', () => {
     expect(parseSetting('onboarding_done', '1')).toEqual({ key: 'onboarding_done', value: '1' })
     expect(parseSetting('retention_days', '365')).toEqual({ key: 'retention_days', value: '365' })
     expect(parseSetting('quit_on_close', '0')).toEqual({ key: 'quit_on_close', value: '0' })
+    expect(parseSetting('auto_update', '1')).toEqual({ key: 'auto_update', value: '1' })
+    expect(parseSetting('auto_update', 'maybe')).toBeNull()
   })
 
   it('rejects unknown keys and bad values, including key material', () => {

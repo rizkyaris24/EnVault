@@ -19,19 +19,20 @@ import { atomicWriteFileSync } from '../utils/atomicWrite'
 import { exportVault, importVault } from '../services/vaultTransfer'
 import { buildDiagnostics } from '../services/diagnostics'
 import { isTrustedSenderUrl, isSafeId, parseTheme, parseAddPayload, isInside, parseSetting, SETTING_KEYS } from './validate'
-import { SecretEntry, AppInfo, IPCResult, Project, EnvFile, ComputerScanSummary, VaultStatus } from '../../shared/types'
+import { SecretEntry, AppInfo, UpdateStatus, IPCResult, Project, EnvFile, ComputerScanSummary, VaultStatus } from '../../shared/types'
 
 /** Secrets copied from the UI are cleared from the clipboard after 30 seconds. */
 export const secretClipboard = createClipboardGuard(clipboard, 30_000)
 
 export interface HandlerDeps {
   getWindow: () => BrowserWindow | null
+  updates: { getStatus: () => UpdateStatus; checkNow: () => Promise<void>; install: () => void }
   /** Called once the vault key is available (startup, unlock, or first passphrase). */
   onVaultReady: () => void
 }
 
 /** Registered once at app start. Every channel checks the sender, the vault lock, and returns a uniform IPCResult. */
-export function registerIpcHandlers({ getWindow, onVaultReady }: HandlerDeps): void {
+export function registerIpcHandlers({ getWindow, updates, onVaultReady }: HandlerDeps): void {
   // Directories the user picked in the native dialog this session; the only ones Add/Scan will accept.
   const approvedDirs = new Set<string>()
 
@@ -345,6 +346,14 @@ export function registerIpcHandlers({ getWindow, onVaultReady }: HandlerDeps): v
       return result
     }
   )
+
+  // Updates (no vault access, so they also answer while locked)
+  handle(IPC_CHANNELS.UPDATE_GET_STATUS, (): UpdateStatus => updates.getStatus(), { allowLocked: true })
+  handle(IPC_CHANNELS.UPDATE_CHECK, async (): Promise<UpdateStatus> => {
+    await updates.checkNow()
+    return updates.getStatus()
+  }, { allowLocked: true })
+  handle(IPC_CHANNELS.UPDATE_INSTALL, () => updates.install(), { allowLocked: true })
 
   // Clipboard: copy a secret and auto-clear it
   handle(IPC_CHANNELS.CLIPBOARD_COPY_SECRET, (_e, text: unknown) => {

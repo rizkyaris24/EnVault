@@ -9,6 +9,7 @@ import {
   DiscoveredEnvFile,
   VaultStatus,
   AppInfo,
+  UpdateStatus,
   SecretReuseReference,
   ComputerScanSummary,
   ScanProgressPayload,
@@ -52,6 +53,11 @@ export interface EnVaultApi {
     exportTo: (passphrase: string) => Promise<IPCResult<{ path: string } | null>>
     importFrom: (passphrase: string) => Promise<IPCResult<{ projects: number; files: number; versions: number } | null>>
   }
+  updates: {
+    getStatus: () => Promise<IPCResult<UpdateStatus>>
+    check: () => Promise<IPCResult<UpdateStatus>>
+    install: () => Promise<IPCResult>
+  }
   clipboard: {
     copySecret: (text: string) => Promise<IPCResult>
   }
@@ -60,6 +66,7 @@ export interface EnVaultApi {
   onFileStatusChanged: (callback: (payload: { fileId: string; projectId: string; existsOnDisk: boolean }) => void) => () => void
   onScanProgress: (callback: (payload: ScanProgressPayload) => void) => () => void
   onOpenSettings: (callback: () => void) => () => void
+  onUpdateStatus: (callback: (status: UpdateStatus) => void) => () => void
 }
 
 const api: EnVaultApi = {
@@ -99,6 +106,11 @@ const api: EnVaultApi = {
     exportTo: (passphrase) => ipcRenderer.invoke(IPC_CHANNELS.VAULT_EXPORT, passphrase),
     importFrom: (passphrase) => ipcRenderer.invoke(IPC_CHANNELS.VAULT_IMPORT, passphrase)
   },
+  updates: {
+    getStatus: () => ipcRenderer.invoke(IPC_CHANNELS.UPDATE_GET_STATUS),
+    check: () => ipcRenderer.invoke(IPC_CHANNELS.UPDATE_CHECK),
+    install: () => ipcRenderer.invoke(IPC_CHANNELS.UPDATE_INSTALL)
+  },
   clipboard: {
     copySecret: (text) => ipcRenderer.invoke(IPC_CHANNELS.CLIPBOARD_COPY_SECRET, text)
   },
@@ -129,6 +141,13 @@ const api: EnVaultApi = {
     ipcRenderer.on(IPC_CHANNELS.EVENT_OPEN_SETTINGS, handler)
     return () => {
       ipcRenderer.removeListener(IPC_CHANNELS.EVENT_OPEN_SETTINGS, handler)
+    }
+  },
+  onUpdateStatus: (callback) => {
+    const handler = (_event: any, status: UpdateStatus): void => callback(status)
+    ipcRenderer.on(IPC_CHANNELS.EVENT_UPDATE_STATUS, handler)
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.EVENT_UPDATE_STATUS, handler)
     }
   }
 }
