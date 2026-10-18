@@ -27,6 +27,17 @@ export function resolveInside(root: string, relative: string): string {
     throw new Error('Path escapes the project directory')
   }
 
+  // A symlinked parent directory would let a "contained" path land elsewhere, so check the real parent too.
+  try {
+    const realParent = fs.realpathSync(path.dirname(target))
+    const parentRel = path.relative(realRoot, realParent)
+    if (parentRel.startsWith('..') || path.isAbsolute(parentRel)) {
+      throw new Error('Path escapes the project directory')
+    }
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err
+  }
+
   try {
     if (fs.lstatSync(target).isSymbolicLink()) {
       throw new Error('Refusing to follow a symlink')

@@ -14,6 +14,7 @@ import { fileWatcherService } from '../services/watcher'
 import { computeEnvDiff } from '../services/diffService'
 import { parseEnv } from '../services/envParser'
 import { createClipboardGuard } from '../utils/clipboardGuard'
+import { createAttemptLimiter } from '../utils/attemptLimiter'
 import { getLogger } from '../utils/logger'
 import { atomicWriteFileSync } from '../utils/atomicWrite'
 import { exportVault, importVault } from '../services/vaultTransfer'
@@ -35,6 +36,13 @@ export interface HandlerDeps {
 export function registerIpcHandlers({ getWindow, updates, onVaultReady }: HandlerDeps): void {
   // Directories the user picked in the native dialog this session; the only ones Add/Scan will accept.
   const approvedDirs = new Set<string>()
+  const passphraseLimiter = createAttemptLimiter()
+  let scanRunning = false
+
+  const throttle = (): void => {
+    const wait = passphraseLimiter.waitMs()
+    if (wait > 0) throw new Error(`Too many attempts. Try again in ${Math.ceil(wait / 1000)} seconds.`)
+  }
 
   function handle<T>(
     channel: string,
@@ -42,7 +50,8 @@ export function registerIpcHandlers({ getWindow, updates, onVaultReady }: Handle
     opts: { allowLocked?: boolean } = {}
   ): void {
     ipcMain.handle(channel, async (event, ...args): Promise<IPCResult<T>> => {
-      if (!isTrustedSenderUrl(event.senderFrame?.url, process.env['ELECTRON_RENDERER_URL'])) {
+      // The dev server origin is only trusted in development builds, never in a packaged app.
+      if (!isTrustedSenderUrl(event.senderFrame?.url, app.isPackaged ? undefined : process.env['ELECTRON_RENDERER_URL'])) {
         return { success: false, error: 'Untrusted sender' }
       }
       if (!opts.allowLocked && !vaultCrypto.isReady()) {
@@ -86,15 +95,21 @@ export function registerIpcHandlers({ getWindow, updates, onVaultReady }: Handle
   // Projects: Scan Single Directory
   handle(IPC_CHANNELS.PROJECTS_SCAN, (_e, projectDir: unknown) => discoverEnvFiles(requireApprovedDir(projectDir)))
 
-  // Projects: Scan Computer & Auto-Save
-  handle(IPC_CHANNELS.PROJECTS_SCAN_COMPUTER, (): Promise<ComputerScanSummary> =>
-    scanComputerAndAutoSave({
-      onProgress: (progress) => {
-        const win = getWindow()
-        if (win && !win.isDestroyed()) win.webContents.send(IPC_CHANNELS.EVENT_SCAN_PROGRESS, progress)
-      }
-    })
-  )
+  // Projects: Scan Computer & Auto-Save (one scan at a time)
+  handle(IPC_CHANNELS.PROJECTS_SCAN_COMPUTER, async (): Promise<ComputerScanSummary> => {
+    if (scanRunning) throw new Error('A scan is already running')
+    scanRunning = true
+    try {
+      return await scanComputerAndAutoSave({
+        onProgress: (progress) => {
+          const win = getWindow()
+          if (win && !win.isDestroyed()) win.webContents.send(IPC_CHANNELS.EVENT_SCAN_PROGRESS, progress)
+        }
+      })
+    } finally {
+      scanRunning = false
+    }
+  })
 
   // Projects: Add with Selected Files
   handle(IPC_CHANNELS.PROJECTS_ADD, (_e, raw: unknown): Project => {
@@ -241,24 +256,39 @@ export function registerIpcHandlers({ getWindow, updates, onVaultReady }: Handle
     vaultDB.getReusedSecretsForProject(requireId(projectId, 'project id'))
   )
 
-  // Vault: Unlock with passphrase
+  // Vault: Unlock with passphrase (guesses are rate limited)
   handle(
     IPC_CHANNELS.VAULT_UNLOCK,
     (_e, passphrase: unknown) => {
-      if (typeof passphrase !== 'string') throw new Error('Invalid passphrase')
-      vaultCrypto.unlock(passphrase)
+      if (typeof passphrase !== 'string' || passphrase.length > 1024) throw new Error('Invalid passphrase')
+      throttle()
+      try {
+        vaultCrypto.unlock(passphrase)
+      } catch (err) {
+        passphraseLimiter.fail()
+        throw err
+      }
+      passphraseLimiter.succeed()
       onVaultReady()
     },
     { allowLocked: true }
   )
 
-  // Vault: Set master / recovery passphrase
+  // Vault: Set master / recovery passphrase. Changing an existing one needs the current passphrase.
   handle(
     IPC_CHANNELS.VAULT_SET_PASSPHRASE,
-    (_e, passphrase: unknown) => {
-      if (typeof passphrase !== 'string') throw new Error('Invalid passphrase')
+    (_e, passphrase: unknown, current: unknown) => {
+      if (typeof passphrase !== 'string' || passphrase.length > 1024) throw new Error('Invalid passphrase')
+      if (current !== undefined && (typeof current !== 'string' || current.length > 1024)) throw new Error('Invalid passphrase')
+      throttle()
       const wasWaiting = vaultCrypto.getState() === 'needs-passphrase-setup'
-      vaultCrypto.setPassphrase(passphrase)
+      try {
+        vaultCrypto.setPassphrase(passphrase, current as string | undefined)
+      } catch (err) {
+        if ((err as Error).message === 'Incorrect passphrase') passphraseLimiter.fail()
+        throw err
+      }
+      passphraseLimiter.succeed()
       if (wasWaiting) onVaultReady()
     },
     { allowLocked: true }
@@ -326,11 +356,13 @@ export function registerIpcHandlers({ getWindow, updates, onVaultReady }: Handle
     return { path: res.filePath }
   })
 
-  // Vault: replace this vault with an export file
+  // Vault: replace this vault with an export file. Confirmed natively (the renderer cannot click through it),
+  // and the current database is copied aside first so a mistaken or hostile import can be undone.
   handle(
     IPC_CHANNELS.VAULT_IMPORT,
     async (_e, passphrase: unknown): Promise<{ projects: number; files: number; versions: number } | null> => {
-      if (typeof passphrase !== 'string') throw new Error('Invalid passphrase')
+      if (typeof passphrase !== 'string' || passphrase.length > 1024) throw new Error('Invalid passphrase')
+      throttle()
       const res = await dialog.showOpenDialog(getWindow()!, {
         title: 'Import EnVault backup',
         properties: ['openFile'],
@@ -338,8 +370,27 @@ export function registerIpcHandlers({ getWindow, updates, onVaultReady }: Handle
       })
       if (res.canceled || res.filePaths.length === 0) return null
       const file = res.filePaths[0]
-      if (fs.statSync(file).size > 500 * 1024 * 1024) throw new Error('This file is too large to be an EnVault backup')
-      const result = importVault(vaultDB, vaultCrypto, fs.readFileSync(file, 'utf8'), passphrase)
+      if (fs.statSync(file).size > 100 * 1024 * 1024) throw new Error('This file is too large to be an EnVault backup')
+
+      const confirm = await dialog.showMessageBox(getWindow()!, {
+        type: 'warning',
+        buttons: ['Cancel', 'Replace vault'],
+        defaultId: 0,
+        cancelId: 0,
+        message: 'Replace everything in this vault?',
+        detail: `All projects and history in this vault will be replaced by the contents of "${path.basename(file)}". A copy of the current vault is saved first as envault.db.bak-import.`
+      })
+      if (confirm.response !== 1) return null
+      vaultDB.snapshotTo('bak-import')
+
+      let result
+      try {
+        result = importVault(vaultDB, vaultCrypto, fs.readFileSync(file, 'utf8'), passphrase)
+      } catch (err) {
+        if ((err as Error).message === 'Incorrect passphrase') passphraseLimiter.fail()
+        throw err
+      }
+      passphraseLimiter.succeed()
       fileWatcherService.closeAll()
       fileWatcherService.initAllWatchers()
       getLogger().info('Vault imported')

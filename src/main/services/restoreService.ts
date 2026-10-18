@@ -31,6 +31,10 @@ export class RestoreService {
       throw new Error(`No version found to restore for file: ${file.relativePath}`)
     }
 
+    if (targetVersion.envFileId !== file.id) {
+      throw new Error('That version does not belong to this file')
+    }
+
     const decryptedContent = backupService.decryptVersion(targetVersion.id)
     const targetPath = resolveInside(project.path, file.relativePath)
 

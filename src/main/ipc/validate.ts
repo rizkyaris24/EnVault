@@ -6,9 +6,8 @@ export function isTrustedSenderUrl(url: string | undefined, devUrl: string | und
   if (!url) return false
   if (url.startsWith('file://')) return true
   if (!devUrl) return false
-  const origin = new URL(devUrl).origin
   try {
-    return new URL(url).origin === origin
+    return new URL(url).origin === new URL(devUrl).origin
   } catch {
     return false
   }

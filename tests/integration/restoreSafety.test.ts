@@ -52,6 +52,17 @@ describe('Backup and restore safety', () => {
     expect(vaultDB.getVersions(file.id)).toHaveLength(1)
   })
 
+  it('refuses to restore a version that belongs to a different file', () => {
+    fs.writeFileSync(path.join(projectDir, '.env'), 'A=file_a_content_xx\n')
+    fs.writeFileSync(path.join(projectDir, '.env.local'), 'B=file_b_content_xx\n')
+    const a = vaultDB.createEnvFile(crypto.randomUUID(), projectId, '.env')
+    const b = vaultDB.createEnvFile(crypto.randomUUID(), projectId, '.env.local')
+    backupService.backupFile(a, projectDir, 'manual')
+    const vb = backupService.backupFile(b, projectDir, 'manual')!.version
+    expect(() => restoreService.restoreFile(a.id, vb.id)).toThrow(/does not belong/i)
+    expect(fs.readFileSync(path.join(projectDir, '.env'), 'utf8')).toBe('A=file_a_content_xx\n')
+  })
+
   it('refuses a tracked path that escapes the project folder', () => {
     fs.writeFileSync(path.join(tmpRoot, 'outside.env'), 'LEAK=should_never_be_read\n')
     const file = vaultDB.createEnvFile(crypto.randomUUID(), projectId, '../outside.env')

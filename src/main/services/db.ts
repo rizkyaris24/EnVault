@@ -175,6 +175,16 @@ export class VaultDB {
     }
   }
 
+  /** Copies the database next to itself as `<file>.<suffix>` (overwriting a previous copy). Returns the copy's path. */
+  public snapshotTo(suffix: string): string {
+    const file = this.dbFile
+    if (!file) throw new Error('Database is not initialized')
+    this.client.pragma('wal_checkpoint(TRUNCATE)')
+    const target = `${file}.${suffix}`
+    fs.copyFileSync(file, target)
+    return target
+  }
+
   private hasTable(name: string): boolean {
     return !!this.client.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(name)
   }

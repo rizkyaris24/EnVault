@@ -1,5 +1,6 @@
 import { VaultDB } from './db'
 import { VaultCrypto } from './crypto'
+import { validateImportTables } from './importValidation'
 
 const FORMAT = 'envault-export'
 const VERSION = 1
@@ -53,9 +54,13 @@ export function importVault(
     throw new Error('This is not a supported EnVault export file')
   }
 
+  validateImportTables(file.tables)
   crypto.verifyExportedKey(file.keyWrap, passphrase, file.pepperEnc)
-  db.replaceAllRows(file.tables)
-  crypto.adoptExportedKey(file.keyWrap, passphrase, file.pepperEnc)
+  // Rows and key change together or not at all.
+  db.runInTransaction(() => {
+    db.replaceAllRows(file.tables)
+    crypto.adoptExportedKey(file.keyWrap, passphrase, file.pepperEnc)
+  })
 
   return { projects: file.tables.projects.length, files: file.tables.env_files.length, versions: file.tables.env_versions.length }
 }

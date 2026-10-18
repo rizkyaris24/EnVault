@@ -38,7 +38,7 @@ export interface EnVaultApi {
     getStatus: () => Promise<IPCResult<VaultStatus>>
     getReuse: (projectId: string) => Promise<IPCResult<Record<string, SecretReuseReference[]>>>
     unlock: (passphrase: string) => Promise<IPCResult>
-    setPassphrase: (passphrase: string) => Promise<IPCResult>
+    setPassphrase: (passphrase: string, currentPassphrase?: string) => Promise<IPCResult>
   }
   settings: {
     get: (key: string) => Promise<IPCResult<string | null>>
@@ -91,7 +91,8 @@ const api: EnVaultApi = {
     getStatus: () => ipcRenderer.invoke(IPC_CHANNELS.SECURITY_GET_STATUS),
     getReuse: (projectId) => ipcRenderer.invoke(IPC_CHANNELS.SECURITY_GET_REUSE, projectId),
     unlock: (passphrase) => ipcRenderer.invoke(IPC_CHANNELS.VAULT_UNLOCK, passphrase),
-    setPassphrase: (passphrase) => ipcRenderer.invoke(IPC_CHANNELS.VAULT_SET_PASSPHRASE, passphrase)
+    setPassphrase: (passphrase, currentPassphrase) =>
+      ipcRenderer.invoke(IPC_CHANNELS.VAULT_SET_PASSPHRASE, passphrase, currentPassphrase)
   },
   settings: {
     get: (key) => ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_GET, key),

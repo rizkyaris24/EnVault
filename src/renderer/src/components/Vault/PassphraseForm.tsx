@@ -11,8 +11,10 @@ interface PassphraseFormProps {
   danger?: boolean
   /** Center the buttons (for centered full-screen layouts). */
   centered?: boolean
+  /** Also ask for the current passphrase (needed to change an existing one). */
+  askCurrent?: boolean
   /** Return an error message, or null on success. */
-  onSubmit: (passphrase: string) => Promise<string | null>
+  onSubmit: (passphrase: string, current?: string) => Promise<string | null>
   onCancel?: () => void
 }
 
@@ -25,30 +27,44 @@ export const PassphraseForm: React.FC<PassphraseFormProps> = ({
   confirm = false,
   danger = false,
   centered = false,
+  askCurrent = false,
   onSubmit,
   onCancel
 }) => {
   const [value, setValue] = useState('')
   const [repeat, setRepeat] = useState('')
+  const [current, setCurrent] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
   const submit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault()
     setError(null)
+    if (askCurrent && !current) return setError('Enter your current passphrase.')
     if (value.length < MIN_PASSPHRASE) return setError(`Use at least ${MIN_PASSPHRASE} characters.`)
     if (confirm && value !== repeat) return setError('The two passphrases do not match.')
     setBusy(true)
-    const err = await onSubmit(value)
+    const err = await onSubmit(value, askCurrent ? current : undefined)
     setBusy(false)
     if (err) setError(err)
   }
 
   return (
     <form onSubmit={submit} className="space-y-3">
+      {askCurrent && (
+        <input
+          type="password"
+          autoFocus
+          value={current}
+          onChange={(e) => setCurrent(e.target.value)}
+          placeholder="Current passphrase"
+          aria-label="Current passphrase"
+          className={inputClass}
+        />
+      )}
       <input
         type="password"
-        autoFocus
+        autoFocus={!askCurrent}
         value={value}
         onChange={(e) => setValue(e.target.value)}
         placeholder={label}

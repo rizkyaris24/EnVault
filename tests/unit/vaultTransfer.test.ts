@@ -110,4 +110,60 @@ describe('vault export and import', () => {
     expect(file).not.toContain((a.vc as any).dek.toString('hex'))
     expect(file).not.toContain((a.vc as any).dek.toString('base64'))
   })
+
+  function tamper(file: string, edit: (tables: any) => void): string {
+    const parsed = JSON.parse(file)
+    edit(parsed.tables)
+    return JSON.stringify(parsed)
+  }
+
+  it('rejects an export whose rows would let a restore write outside .env files', () => {
+    const a = makeVault('mac-a')
+    addSecretVersion(a.db, a.vc, 'alpha', 'A=value_one_here\n')
+    const good = exportVault(a.db, a.vc, PASS)
+
+    const b = makeVault('mac-b')
+    addSecretVersion(b.db, b.vc, 'keep-me', 'B=value_two_here\n')
+
+    const attacks: Array<[string, (t: any) => void]> = [
+      ['dotfile', (t) => (t.env_files[0].relative_path = '.zshrc')],
+      ['launch agent', (t) => (t.env_files[0].relative_path = 'Library/LaunchAgents/x.plist')],
+      ['traversal', (t) => (t.env_files[0].relative_path = '../../.ssh/.env')],
+      ['absolute file', (t) => (t.env_files[0].relative_path = '/etc/.env')],
+      ['relative project path', (t) => (t.projects[0].path = 'relative/dir')],
+      ['null byte', (t) => (t.env_files[0].relative_path = '.env\0.sh')],
+      ['non-string id', (t) => (t.projects[0].id = { $ne: 1 })]
+    ]
+    for (const [name, edit] of attacks) {
+      expect(() => importVault(b.db, b.vc, tamper(good, edit), PASS), name).toThrow()
+    }
+    expect(b.db.getProjects().map((p) => p.id)).toEqual(['keep-me'])
+  })
+
+  it('accepts nested .env paths that the scanner legitimately produces', () => {
+    const a = makeVault('mac-a')
+    addSecretVersion(a.db, a.vc, 'alpha', 'A=value_one_here\n')
+    const file = tamper(exportVault(a.db, a.vc, PASS), (t) => (t.env_files[0].relative_path = 'apps/web/.env.local'))
+    const b = makeVault('mac-b')
+    expect(importVault(b.db, b.vc, file, PASS).projects).toBe(1)
+  })
+
+  it('leaves the vault and its key untouched if adopting the key fails mid-import', () => {
+    const a = makeVault('mac-a')
+    addSecretVersion(a.db, a.vc, 'alpha', 'A=value_one_here\n')
+    const file = exportVault(a.db, a.vc, PASS)
+
+    const b = makeVault('mac-b')
+    const oldId = b.db.getProjects().length
+    const oldVersion = addSecretVersion(b.db, b.vc, 'keep-me', 'B=value_two_here\n')
+    const failing = new VaultCrypto()
+    failing.initialize(metaOf(b.db), keystore('mac-b'))
+    ;(failing as any).keystore = { ...keystore('mac-b'), wrap: () => { throw new Error('keychain write failed') } }
+
+    expect(() => importVault(b.db, failing, file, PASS)).toThrow(/keychain write failed/)
+    expect(oldId).toBe(0)
+    expect(b.db.getProjects().map((p) => p.id)).toEqual(['keep-me'])
+    const v = b.db.getVersionById(oldVersion)!
+    expect(failing.decrypt({ ciphertext: v.ciphertext, iv: v.iv, authTag: v.authTag })).toBe('B=value_two_here\n')
+  })
 })

@@ -17,6 +17,8 @@ Repository secrets (Settings > Secrets and variables > Actions):
 
 Enable **Security > Private vulnerability reporting** on the repository (see `SECURITY.md`).
 
+Create a **`release` environment** (Settings > Environments) and add yourself as a required reviewer. The build job runs in it, so signing only happens after you approve. Move the six secrets above into that environment (environment secrets are not exposed to other workflows). Workflow actions are pinned to commit SHAs; update them deliberately (`gh api repos/<action>/commits/<tag> -q .sha`).
+
 ## Cutting a release
 
 1. Update `CHANGELOG.md` and bump `version` in `package.json` (`npm version 1.0.0 --no-git-tag-version`).
@@ -25,6 +27,10 @@ Enable **Security > Private vulnerability reporting** on the repository (see `SE
 4. The workflow tests, builds arm64 and x64, signs, notarizes, verifies (`codesign`, `spctl`, `stapler`), smoke-tests the app, and drafts a GitHub release with the artifacts.
 5. Upload to the update server, **zips and `latest-mac.yml` last**: copy `*.dmg`, `*.zip`, `*.blockmap`, then `latest-mac.yml` into the folder `ENVAULT_UPDATE_URL` points to. Publishing `latest-mac.yml` is what makes installed apps see the update.
 6. Publish the download page link to the `.dmg` and the SHA-256 (`shasum -a 256 EnVault-*.dmg`).
+
+## Beta releases
+
+Use a prerelease version (`1.0.0-beta.1`). electron-builder then writes `beta-mac.yml` instead of `latest-mac.yml`, and builds with a prerelease version follow the beta channel, so stable users are never offered them. Upload beta files to the same update folder.
 
 ## Rollback
 

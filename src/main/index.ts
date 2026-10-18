@@ -68,7 +68,8 @@ function createWindow(): void {
   })
   fileWatcherService.setMainWindow(mainWindow)
 
-  if (process.env['ELECTRON_RENDERER_URL']) {
+  // A dev server URL is only honoured in development; a packaged app always loads its own bundled page.
+  if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
@@ -112,6 +113,8 @@ function focusMainWindow(): void {
 
 process.on('uncaughtException', (err) => getLogger().error('Uncaught exception', err))
 process.on('unhandledRejection', (reason) => getLogger().error('Unhandled rejection', reason))
+// A kill or Ctrl+C should still run the normal quit cleanup (clipboard clear, database checkpoint).
+for (const signal of ['SIGTERM', 'SIGINT'] as const) process.on(signal, () => app.quit())
 
 app.on('web-contents-created', (_event, contents) => {
   // The window only ever shows our own page; block any other navigation and all webviews.

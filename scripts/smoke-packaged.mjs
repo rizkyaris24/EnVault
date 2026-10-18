@@ -54,15 +54,20 @@ try {
   const page = await waitForPage()
   check(!!page, 'window loaded from the packaged app')
   if (page) {
-    const r = await evaluate(
-      page.webSocketDebuggerUrl,
-      `(async () => {
-        const s = await window.envaultApi.security.getStatus()
-        const i = await window.envaultApi.app.getInfo()
-        return { state: s.data?.state, keySource: s.data?.keySource, version: i.data?.version,
-                 noNode: typeof require === 'undefined' && typeof process === 'undefined' }
-      })()`
-    )
+    // The window can appear a moment before the preload bridge and IPC answer, so retry until the app responds.
+    const probe = `(async () => {
+      if (!window.envaultApi) return null
+      const s = await window.envaultApi.security.getStatus()
+      if (!s.success) return null
+      const i = await window.envaultApi.app.getInfo()
+      return { state: s.data?.state, keySource: s.data?.keySource, version: i.data?.version,
+               noNode: typeof require === 'undefined' && typeof process === 'undefined' }
+    })()`
+    let r = null
+    for (let i = 0; i < 30 && !r; i++) {
+      r = await evaluate(page.webSocketDebuggerUrl, probe).catch(() => null)
+      if (!r) await new Promise((res) => setTimeout(res, 1000))
+    }
     check(r?.state === 'ready', `vault opens (state: ${r?.state}, key: ${r?.keySource})`)
     check(r?.version === pkg.version, `version matches package.json (${r?.version})`)
     check(r?.noNode === true, 'renderer has no Node access')

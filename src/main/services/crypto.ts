@@ -24,7 +24,22 @@ export type VaultState = 'ready' | 'locked' | 'needs-passphrase-setup'
 export type KeySource = 'keychain' | 'passphrase'
 
 const MIN_PASSPHRASE_LENGTH = 10
-const SCRYPT = { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 }
+// New wraps use N=2^17 (OWASP baseline); the parameters are stored in the blob so they can be raised later.
+// Older wraps (no parameters) used N=2^15. Only these exact sets are accepted, so a hostile blob cannot ask for
+// gigabytes of memory.
+const SCRYPT_CURRENT = { N: 131072, r: 8, p: 1 }
+const SCRYPT_LEGACY = { N: 32768, r: 8, p: 1 }
+const SCRYPT_MAXMEM = 256 * 1024 * 1024
+const GCM_IV_BYTES = 12
+const GCM_TAG_BYTES = 16
+
+function scryptParamsOf(blob: { N?: number; r?: number; p?: number }): { N: number; r: number; p: number } {
+  if (blob.N === undefined) return SCRYPT_LEGACY
+  for (const allowed of [SCRYPT_CURRENT, SCRYPT_LEGACY]) {
+    if (blob.N === allowed.N && blob.r === allowed.r && blob.p === allowed.p) return allowed
+  }
+  throw new Error('Unsupported key derivation parameters')
+}
 
 /** Electron safeStorage as a KeyStore. On Linux, `basic_text` is not real encryption, so it counts as unavailable. */
 export function electronKeyStore(): KeyStore {
@@ -121,12 +136,24 @@ export class VaultCrypto {
    * Sets the user passphrase: the master password when no keychain exists, or the recovery passphrase otherwise.
    * Allowed when the vault is waiting for its first passphrase or is already unlocked.
    */
-  public setPassphrase(passphrase: string): void {
+  public setPassphrase(passphrase: string, currentPassphrase?: string): void {
     this.assertPassphrase(passphrase)
     const dek = this.dek ?? this.pendingDek
     if (!this.meta || !dek || (this.state !== 'ready' && this.state !== 'needs-passphrase-setup')) {
       throw new Error('Vault is not ready to set a passphrase')
     }
+
+    // Replacing an existing recovery passphrase must be proven, so a compromised UI cannot swap in its own.
+    const existing = this.meta.get('dek_wrap_pass')
+    if (existing && this.state === 'ready') {
+      if (!currentPassphrase) throw new Error('Enter your current passphrase to change it')
+      try {
+        this.unwrapWithPassphrase(existing, currentPassphrase)
+      } catch {
+        throw new Error('Incorrect passphrase')
+      }
+    }
+
     this.meta.set('dek_wrap_pass', this.wrapWithPassphrase(dek, passphrase))
     if (this.state === 'needs-passphrase-setup') {
       this.dek = dek
@@ -167,12 +194,13 @@ export class VaultCrypto {
 
   private wrapWithPassphrase(dek: Buffer, passphrase: string): string {
     const salt = crypto.randomBytes(16)
-    const iv = crypto.randomBytes(12)
-    const key = crypto.scryptSync(passphrase, salt, 32, SCRYPT)
-    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv)
+    const iv = crypto.randomBytes(GCM_IV_BYTES)
+    const key = crypto.scryptSync(passphrase, salt, 32, { ...SCRYPT_CURRENT, maxmem: SCRYPT_MAXMEM })
+    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv, { authTagLength: GCM_TAG_BYTES })
     const ct = Buffer.concat([cipher.update(dek), cipher.final()])
     return JSON.stringify({
-      v: 1,
+      v: 2,
+      ...SCRYPT_CURRENT,
       salt: salt.toString('base64'),
       iv: iv.toString('base64'),
       tag: cipher.getAuthTag().toString('base64'),
@@ -181,10 +209,14 @@ export class VaultCrypto {
   }
 
   private unwrapWithPassphrase(blob: string, passphrase: string): Buffer {
-    const w = JSON.parse(blob) as { salt: string; iv: string; tag: string; ct: string }
-    const key = crypto.scryptSync(passphrase, Buffer.from(w.salt, 'base64'), 32, SCRYPT)
-    const decipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(w.iv, 'base64'))
-    decipher.setAuthTag(Buffer.from(w.tag, 'base64'))
+    const w = JSON.parse(blob) as { N?: number; r?: number; p?: number; salt: string; iv: string; tag: string; ct: string }
+    const params = scryptParamsOf(w)
+    const iv = Buffer.from(w.iv, 'base64')
+    const tag = Buffer.from(w.tag, 'base64')
+    if (iv.length !== GCM_IV_BYTES || tag.length !== GCM_TAG_BYTES) throw new Error('Malformed key wrap')
+    const key = crypto.scryptSync(passphrase, Buffer.from(w.salt, 'base64'), 32, { ...params, maxmem: SCRYPT_MAXMEM })
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv, { authTagLength: GCM_TAG_BYTES })
+    decipher.setAuthTag(tag)
     return Buffer.concat([decipher.update(Buffer.from(w.ct, 'base64')), decipher.final()])
   }
 
@@ -206,21 +238,30 @@ export class VaultCrypto {
     this.decryptWith(dek, JSON.parse(pepperEnc))
   }
 
-  /** Replaces this vault's key with the exported one (after the data was imported). The export passphrase becomes the recovery passphrase. */
+  /**
+   * Replaces this vault's key with the exported one (after the data was imported). The export passphrase becomes
+   * the recovery passphrase. The keychain write happens first and in-memory state is restored on failure, so a
+   * failed adoption changes nothing (the caller runs this inside the same database transaction as the import).
+   */
   public adoptExportedKey(wrappedKey: string, passphrase: string, pepperEnc: string): void {
     if (!this.meta || !this.keystore) throw new Error('Vault is not initialized')
     this.verifyExportedKey(wrappedKey, passphrase, pepperEnc)
-    this.dek = this.unwrapWithPassphrase(wrappedKey, passphrase)
-    this.meta.set('vault_pepper_enc', pepperEnc)
-    this.meta.set('dek_wrap_pass', wrappedKey)
-    if (this.keystore.isAvailable()) {
-      this.meta.set('encrypted_dek', this.keystore.wrap(this.dek.toString('hex')))
-      this.keySource = 'keychain'
-    } else {
-      this.meta.delete('encrypted_dek')
-      this.keySource = 'passphrase'
+    const dek = this.unwrapWithPassphrase(wrappedKey, passphrase)
+    const keychainBlob = this.keystore.isAvailable() ? this.keystore.wrap(dek.toString('hex')) : null
+
+    const previous = { dek: this.dek, pepper: this.pepper, state: this.state, keySource: this.keySource }
+    try {
+      this.meta.set('vault_pepper_enc', pepperEnc)
+      this.meta.set('dek_wrap_pass', wrappedKey)
+      if (keychainBlob) this.meta.set('encrypted_dek', keychainBlob)
+      else this.meta.delete('encrypted_dek')
+      this.dek = dek
+      this.keySource = keychainBlob ? 'keychain' : 'passphrase'
+      this.finalize()
+    } catch (err) {
+      Object.assign(this, previous)
+      throw err
     }
-    this.finalize()
   }
 
   /** Loads (or creates) the HMAC pepper, stored encrypted under the DEK. Migrates the old plaintext pepper. */
@@ -255,8 +296,8 @@ export class VaultCrypto {
       throw new Error('VaultCrypto is not initialized: DEK is missing')
     }
 
-    const iv = crypto.randomBytes(12)
-    const cipher = crypto.createCipheriv('aes-256-gcm', this.dek, iv)
+    const iv = crypto.randomBytes(GCM_IV_BYTES)
+    const cipher = crypto.createCipheriv('aes-256-gcm', this.dek, iv, { authTagLength: GCM_TAG_BYTES })
 
     let ciphertext = cipher.update(plaintext, 'utf8', 'base64')
     ciphertext += cipher.final('base64')
@@ -282,7 +323,9 @@ export class VaultCrypto {
   private decryptWith(key: Buffer, payload: EncryptedPayload): string {
     const iv = Buffer.from(payload.iv, 'base64')
     const authTag = Buffer.from(payload.authTag, 'base64')
-    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv)
+    // Pin lengths: Node would otherwise accept a truncated tag.
+    if (iv.length !== GCM_IV_BYTES || authTag.length !== GCM_TAG_BYTES) throw new Error('Malformed ciphertext')
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv, { authTagLength: GCM_TAG_BYTES })
     decipher.setAuthTag(authTag)
 
     let decrypted = decipher.update(payload.ciphertext, 'base64', 'utf8')
