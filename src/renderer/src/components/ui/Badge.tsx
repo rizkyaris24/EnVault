@@ -14,11 +14,11 @@ export const Badge: React.FC<BadgeProps> = ({
   ...props
 }) => {
   const variantStyles = {
-    default: 'bg-raised text-fg-muted border-line',
-    accent: 'bg-accent/10 text-accent border-accent/30',
-    danger: 'bg-danger/10 text-danger border-danger/30',
-    success: 'bg-success/10 text-success border-success/30',
-    warn: 'bg-warn/10 text-warn border-warn/30'
+    default: 'bg-raised text-fg-muted',
+    accent: 'bg-accent/10 text-accent',
+    danger: 'bg-danger/10 text-danger',
+    success: 'bg-success/10 text-success',
+    warn: 'bg-warn/10 text-warn'
   }
 
   const dotStyles = {
@@ -32,7 +32,7 @@ export const Badge: React.FC<BadgeProps> = ({
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 px-2 py-0.5 text-meta font-medium rounded-chip border select-none',
+        'inline-flex items-center gap-1.5 px-2 py-0.5 text-meta font-medium rounded-full select-none',
         variantStyles[variant],
         className
       )}

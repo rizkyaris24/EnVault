@@ -10,8 +10,8 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> 
 export const Input = React.forwardRef<HTMLInputElement, InputProps>(
   ({ className, leftIcon, rightElement, inputSize = 'md', type = 'text', ...props }, ref) => {
     const sizeStyles = {
-      sm: 'h-8 text-meta px-2.5',
-      md: 'h-9 text-ui px-3'
+      sm: 'h-9 text-meta px-3',
+      md: 'h-10 text-ui px-3.5'
     }
 
     return (
@@ -25,7 +25,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
           ref={ref}
           type={type}
           className={cn(
-            'w-full bg-raised text-fg placeholder:text-fg-subtle border border-line rounded-control transition-colors duration-150',
+            'w-full bg-raised text-fg placeholder:text-fg-subtle border border-transparent rounded-control transition-colors duration-150',
             'focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent',
             'disabled:opacity-50 disabled:cursor-not-allowed',
             leftIcon && (inputSize === 'sm' ? 'pl-8' : 'pl-9'),

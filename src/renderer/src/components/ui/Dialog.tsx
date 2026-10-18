@@ -70,13 +70,13 @@ export const Dialog: React.FC<DialogProps> = ({
         aria-describedby={description ? 'dialog-description' : undefined}
         tabIndex={-1}
         className={cn(
-          'w-full bg-surface border border-line rounded-dialog shadow-xl outline-none overflow-hidden flex flex-col max-h-[90vh]',
+          'w-full bg-canvas rounded-dialog shadow-float outline-none overflow-hidden flex flex-col max-h-[90vh]',
           widthStyles[maxWidth],
           className
         )}
       >
         {/* Dialog Header */}
-        <div className="flex items-start justify-between p-5 border-b border-line-subtle select-none">
+        <div className="flex items-start justify-between px-6 pt-6 pb-2 select-none">
           <div className="space-y-1">
             <h2 id="dialog-title" className="text-title font-semibold text-fg tracking-tight">
               {title}
@@ -97,11 +97,11 @@ export const Dialog: React.FC<DialogProps> = ({
         </div>
 
         {/* Dialog Body */}
-        <div className="p-5 overflow-y-auto flex-1">{children}</div>
+        <div className="px-6 py-4 overflow-y-auto flex-1">{children}</div>
 
         {/* Dialog Footer */}
         {footer && (
-          <div className="p-4 border-t border-line-subtle bg-raised/40 flex items-center justify-end gap-3 select-none">
+          <div className="px-6 py-5 flex items-center justify-end gap-3 select-none">
             {footer}
           </div>
         )}

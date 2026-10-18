@@ -30,19 +30,22 @@ module.exports = {
         warn: 'var(--warn)'
       },
       fontFamily: {
-        sans: ['"IBM Plex Sans"', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
-        mono: ['"IBM Plex Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace']
+        sans: ['"Geist Variable"', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+        mono: ['"Geist Mono Variable"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace']
       },
       borderRadius: {
         chip: '4px',
-        control: '6px',
-        panel: '8px',
-        dialog: '12px'
+        control: '8px',
+        panel: '10px',
+        dialog: '16px'
+      },
+      boxShadow: {
+        float: 'var(--shadow-float)'
       },
       fontSize: {
-        display: ['20px', { lineHeight: '28px' }],
-        title: ['14px', { lineHeight: '20px' }],
-        ui: ['13px', { lineHeight: '20px' }],
+        display: ['28px', { lineHeight: '34px', letterSpacing: '-0.02em' }],
+        title: ['15px', { lineHeight: '22px' }],
+        ui: ['14px', { lineHeight: '22px' }],
         meta: ['12px', { lineHeight: '16px' }]
       },
       keyframes: {

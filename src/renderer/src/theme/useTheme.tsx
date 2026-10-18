@@ -5,45 +5,6 @@ export type ResolvedTheme = 'light' | 'dark'
 
 const STORAGE_KEY = 'envault-theme'
 
-export const THEME_TOKENS = {
-  dark: {
-    '--canvas': '#0B0B0C',
-    '--surface': '#111113',
-    '--raised': '#17171A',
-    '--line-subtle': '#232327',
-    '--line': '#2E2E33',
-    '--line-strong': '#3F3F46',
-    '--fg': '#ECECEE',
-    '--fg-muted': '#A1A1AA',
-    '--fg-subtle': '#8B8B94',
-    '--accent': '#6E9BFF',
-    '--accent-hover': '#5A8AF5',
-    '--on-accent': '#0B0B0C',
-    '--danger': '#F2686D',
-    '--success': '#4CC38A',
-    '--warn': '#F5A524',
-    'color-scheme': 'dark'
-  },
-  light: {
-    '--canvas': '#FAFAFA',
-    '--surface': '#FFFFFF',
-    '--raised': '#F4F4F5',
-    '--line-subtle': '#E4E4E7',
-    '--line': '#D4D4D8',
-    '--line-strong': '#A1A1AA',
-    '--fg': '#18181B',
-    '--fg-muted': '#52525B',
-    '--fg-subtle': '#6B6B74',
-    '--accent': '#2F5FD0',
-    '--accent-hover': '#2550B5',
-    '--on-accent': '#FFFFFF',
-    '--danger': '#CE2C31',
-    '--success': '#18794E',
-    '--warn': '#AD5700',
-    'color-scheme': 'light'
-  }
-} as const
-
 function getSystemTheme(): ResolvedTheme {
   if (typeof window === 'undefined' || !window.matchMedia) return 'dark'
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
@@ -64,13 +25,7 @@ export function applyTheme(resolved: ResolvedTheme, preference: ThemePreference)
     root.classList.remove('dark')
   }
 
-  // 2. Directly inject CSS variable overrides onto root style for instant and fail-safe application
-  const tokens = THEME_TOKENS[resolved]
-  for (const [key, value] of Object.entries(tokens)) {
-    root.style.setProperty(key, value)
-  }
-
-  // 3. Synchronize native window chrome in Electron
+  // 2. Synchronize native window chrome in Electron
   if (typeof window !== 'undefined' && window.envaultApi?.setTheme) {
     window.envaultApi.setTheme(preference).catch(() => {
       // IPC unavailable in web test environments

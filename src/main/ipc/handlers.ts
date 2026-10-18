@@ -289,7 +289,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
         nativeTheme.themeSource = theme
         if (mainWindow && !mainWindow.isDestroyed()) {
           const isDark = theme === 'system' ? nativeTheme.shouldUseDarkColors : theme === 'dark'
-          mainWindow.setBackgroundColor(isDark ? '#0B0B0C' : '#FAFAFA')
+          mainWindow.setBackgroundColor(isDark ? '#0B0B0C' : '#FFFFFF')
         }
         return { success: true, data: true }
       } catch (err) {

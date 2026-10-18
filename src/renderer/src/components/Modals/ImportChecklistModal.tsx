@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { DiscoveredEnvFile } from '@shared/types'
-import { CheckSquare, Square, FileText, AlertCircle } from 'lucide-react'
-import { Dialog, Button, Badge } from '../ui'
+import { CheckSquare, Square } from 'lucide-react'
+import { Dialog, Button } from '../ui'
 
 interface ImportChecklistModalProps {
   isOpen: boolean
@@ -72,20 +72,19 @@ export const ImportChecklistModal: React.FC<ImportChecklistModalProps> = ({
     onConfirm(Array.from(selected), projectName.trim())
   }
 
+  const textBtn =
+    'text-meta text-fg-muted hover:text-fg transition-colors rounded-control outline-none focus-visible:outline-2 focus-visible:outline-accent'
+
   return (
     <Dialog
       isOpen={isOpen}
       onClose={onClose}
-      title="Register Project"
-      description="Configure tracked environment files for passive backup"
+      title="Add project"
+      description="Choose which .env files EnVault should back up."
       maxWidth="md"
       footer={
-        <div className="grid grid-cols-2 gap-3 w-full">
-          <Button
-            variant="secondary"
-            onClick={onClose}
-            disabled={isLoading}
-          >
+        <>
+          <Button variant="ghost" onClick={onClose} disabled={isLoading}>
             Cancel
           </Button>
           <Button
@@ -94,82 +93,57 @@ export const ImportChecklistModal: React.FC<ImportChecklistModalProps> = ({
             isLoading={isLoading}
             disabled={discoveredFiles.length > 0 && selected.size === 0}
           >
-            {selected.size > 0 ? `Track (${selected.size}) Files` : 'Track Project'}
+            {selected.size > 0 ? `Track ${selected.size} ${selected.size === 1 ? 'file' : 'files'}` : 'Track project'}
           </Button>
-        </div>
+        </>
       }
     >
-      <div className="space-y-4">
-        {/* Project Name */}
+      <div className="space-y-5">
         <div>
-          <label className="block text-meta font-medium text-fg-subtle mb-1">
-            Project Name
+          <label htmlFor="project-name" className="block text-meta text-fg-subtle mb-1.5">
+            Name
           </label>
           <input
+            id="project-name"
             type="text"
             value={projectName}
             onChange={(e) => setProjectName(e.target.value)}
-            className="w-full h-9 bg-raised border border-line rounded-control px-3 text-ui text-fg placeholder:text-fg-subtle focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors"
+            className="w-full h-10 bg-raised rounded-control px-3.5 text-ui text-fg placeholder:text-fg-subtle focus:outline-none focus-visible:outline-2 focus-visible:outline-accent"
             placeholder="e.g. My Next.js App"
           />
+          <p className="mt-1.5 text-meta font-mono text-fg-subtle truncate select-text">{projectDir}</p>
         </div>
 
-        {/* Project Location */}
         <div>
-          <label className="block text-meta font-medium text-fg-subtle mb-1">
-            Project Location
-          </label>
-          <div className="px-3 py-2 bg-canvas border border-line-subtle rounded-control text-meta font-mono text-fg-muted truncate select-text">
-            {projectDir}
-          </div>
-        </div>
-
-        {/* Files Checklist */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-meta font-medium text-fg">
-              Discovered Files ({discoveredFiles.length})
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-meta text-fg-subtle">
+              {discoveredFiles.length} {discoveredFiles.length === 1 ? 'file' : 'files'} found
             </span>
-            <div className="flex items-center space-x-1.5 text-meta">
-              <button
-                type="button"
-                onClick={selectRecommended}
-                className="px-2 py-0.5 rounded-chip bg-raised hover:bg-line-subtle text-accent border border-line-subtle transition-colors"
-              >
-                Recommended
-              </button>
-              <button
-                type="button"
-                onClick={selectAll}
-                className="px-2 py-0.5 rounded-chip bg-raised hover:bg-line-subtle text-fg-muted hover:text-fg border border-line-subtle transition-colors"
-              >
-                All
-              </button>
-              <button
-                type="button"
-                onClick={deselectAll}
-                className="px-2 py-0.5 rounded-chip bg-raised hover:bg-line-subtle text-fg-subtle hover:text-fg-muted border border-line-subtle transition-colors"
-              >
-                Clear
-              </button>
-            </div>
+            {discoveredFiles.length > 0 && (
+              <div className="flex items-center gap-3">
+                <button type="button" onClick={selectRecommended} className={textBtn}>
+                  Recommended
+                </button>
+                <button type="button" onClick={selectAll} className={textBtn}>
+                  All
+                </button>
+                <button type="button" onClick={deselectAll} className={textBtn}>
+                  None
+                </button>
+              </div>
+            )}
           </div>
 
           {discoveredFiles.length === 0 ? (
-            <div className="p-6 border border-line border-dashed rounded-control text-center bg-raised/20">
-              <AlertCircle className="w-6 h-6 text-fg-subtle mx-auto mb-2 opacity-60" />
-              <p className="text-ui font-medium text-fg">No .env files detected yet in this directory</p>
-              <p className="text-meta text-fg-muted mt-1 max-w-sm mx-auto">
-                You can still register this project. Any .env files created here will be passively detected and backed up.
-              </p>
-            </div>
+            <p className="py-6 text-ui text-fg-muted">
+              No .env files yet. You can still add this project. Any .env file created here is backed up automatically.
+            </p>
           ) : (
-            <div className="space-y-1 max-h-56 overflow-y-auto">
+            <ul className="max-h-56 overflow-y-auto">
               {discoveredFiles.map((file) => {
                 const isChecked = selected.has(file.relativePath)
-                const isExample = !file.isDefaultChecked
                 return (
-                  <div
+                  <li
                     key={file.relativePath}
                     role="checkbox"
                     aria-checked={isChecked}
@@ -181,33 +155,24 @@ export const ImportChecklistModal: React.FC<ImportChecklistModalProps> = ({
                         toggleSelect(file.relativePath)
                       }
                     }}
-                    className={`flex items-center justify-between px-3 py-2 rounded-control border text-meta cursor-pointer transition-colors select-none outline-none focus-visible:outline-2 focus-visible:outline-accent ${
-                      isChecked
-                        ? 'bg-raised border-line text-fg font-medium'
-                        : 'bg-surface border-line-subtle text-fg-muted hover:bg-raised/50'
-                    }`}
+                    className="flex items-center gap-3 h-11 px-3 -mx-3 rounded-control cursor-pointer select-none hover:bg-raised/60 outline-none focus-visible:outline-2 focus-visible:outline-accent"
                   >
-                    <div className="flex items-center space-x-2.5 truncate flex-1 min-w-0 pr-2">
-                      {isChecked ? (
-                        <CheckSquare className="w-4 h-4 text-accent shrink-0" />
-                      ) : (
-                        <Square className="w-4 h-4 text-fg-subtle shrink-0" />
-                      )}
-                      <FileText className={`w-3.5 h-3.5 shrink-0 ${isChecked ? 'text-accent' : 'text-fg-subtle'}`} />
-                      <span className="font-mono text-ui truncate">{file.relativePath}</span>
-                      {isExample && (
-                        <Badge variant="default" className="text-meta py-0">
-                          template
-                        </Badge>
-                      )}
-                    </div>
-                    <span className="text-meta text-fg-subtle font-mono shrink-0">
+                    {isChecked ? (
+                      <CheckSquare className="w-4 h-4 text-fg shrink-0" />
+                    ) : (
+                      <Square className="w-4 h-4 text-fg-subtle shrink-0" />
+                    )}
+                    <span className={`font-mono text-ui truncate flex-1 ${isChecked ? 'text-fg' : 'text-fg-muted'}`}>
+                      {file.relativePath}
+                    </span>
+                    {!file.isDefaultChecked && <span className="text-meta text-fg-subtle">template</span>}
+                    <span className="text-meta text-fg-subtle shrink-0">
                       {file.lineCount} {file.lineCount === 1 ? 'var' : 'vars'}
                     </span>
-                  </div>
+                  </li>
                 )
               })}
-            </div>
+            </ul>
           )}
         </div>
       </div>

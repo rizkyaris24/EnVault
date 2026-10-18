@@ -1,138 +1,109 @@
 import React from 'react'
 import { Project, EnvFile } from '@shared/types'
-import {
-  ExternalLink,
-  Camera,
-  Code,
-  ListFilter,
-  History,
-  FileText
-} from 'lucide-react'
-import { Button, IconButton, SegmentedControl } from '../ui'
+import { ExternalLink, Camera } from 'lucide-react'
+import { Button, IconButton, relativeTime } from '../ui'
+
+type View = 'table' | 'raw' | 'history'
 
 interface ProjectHeaderProps {
   project: Project
   files: EnvFile[]
   selectedFileId: string | null
-  activeView: 'table' | 'raw' | 'history'
+  activeView: View
   versionCount: number
   isBackingUp: boolean
   onSelectFile: (fileId: string) => void
-  onChangeView: (view: 'table' | 'raw' | 'history') => void
+  onChangeView: (view: View) => void
   onRevealFolder: () => void
   onBackupNow: () => void
 }
+
+const VIEWS: { value: View; label: string }[] = [
+  { value: 'table', label: 'Secrets' },
+  { value: 'raw', label: 'Raw' },
+  { value: 'history', label: 'History' }
+]
+
+const tabClass = (active: boolean): string =>
+  `h-10 -mb-px border-b-2 text-ui transition-colors outline-none focus-visible:outline-2 focus-visible:outline-accent shrink-0 ${
+    active ? 'text-fg font-medium border-fg' : 'text-fg-muted hover:text-fg border-transparent'
+  }`
 
 export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
   project,
   files,
   selectedFileId,
   activeView,
-  versionCount,
   isBackingUp,
   onSelectFile,
   onChangeView,
   onRevealFolder,
   onBackupNow
-}) => {
-  const viewOptions: { value: 'table' | 'raw' | 'history'; label: string; icon: React.ReactNode; badge?: number }[] = [
-    { value: 'table', label: 'Secrets', icon: <ListFilter className="w-3.5 h-3.5" /> },
-    { value: 'raw', label: 'Raw', icon: <Code className="w-3.5 h-3.5" /> },
-    { value: 'history', label: 'History', icon: <History className="w-3.5 h-3.5" />, badge: versionCount }
-  ]
-
-  return (
-    <header className="border-b border-line bg-surface select-none">
-      {/* Top Breadcrumb & Actions Bar */}
-      <div className="titlebar-drag-region pt-7 px-6 pb-3 flex items-center justify-between">
-        <div className="titlebar-no-drag flex items-center space-x-3 min-w-0">
-          <div className="min-w-0">
-            <div className="flex items-center space-x-2">
-              <h1 className="text-title font-semibold text-fg tracking-tight truncate">
-                {project.name}
-              </h1>
-              <IconButton
-                icon={<ExternalLink className="w-3.5 h-3.5" />}
-                label="Reveal project folder"
-                size="sm"
-                variant="ghost"
-                onClick={onRevealFolder}
-                className="text-fg-subtle hover:text-fg"
-              />
-            </div>
-            <div className="text-meta font-mono text-fg-subtle truncate max-w-xl">
-              {project.path}
-            </div>
-          </div>
-        </div>
-
-        {/* Primary Action & Status */}
-        <div className="titlebar-no-drag flex items-center space-x-3 shrink-0">
-          <div
-            className="hidden sm:flex items-center space-x-1.5 px-2 py-1 rounded-control bg-raised border border-line text-meta text-fg-muted"
-            title="Continuous background file monitoring active"
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-success shrink-0" />
-            <span>Watching</span>
-          </div>
-
-          <Button
+}) => (
+  <header className="max-w-[720px] w-full mx-auto px-8 pt-6 select-none">
+    <div className="flex items-start justify-between gap-6">
+      <div className="min-w-0">
+        <h1 className="text-display font-semibold text-fg truncate">{project.name}</h1>
+        <div className="flex items-center gap-1 mt-1 min-w-0">
+          <span className="text-meta font-mono text-fg-subtle truncate select-text">{project.path}</span>
+          <IconButton
+            icon={<ExternalLink className="w-3.5 h-3.5" />}
+            label="Reveal project folder"
             size="sm"
-            variant="primary"
-            onClick={onBackupNow}
-            isLoading={isBackingUp}
-            leftIcon={<Camera className="w-3.5 h-3.5" />}
-            title="Create an immediate encrypted snapshot"
-          >
-            {isBackingUp ? 'Snapshotting...' : 'Snapshot'}
-          </Button>
-        </div>
-      </div>
-
-      {/* Navigation Subbar: File Tabs & View Switcher */}
-      <div className="px-6 flex items-center justify-between border-t border-line-subtle bg-canvas">
-        {/* Horizontal File Tabs */}
-        <div className="flex items-center space-x-1 overflow-x-auto py-1.5 pr-4 scrollbar-none">
-          {files.map((file) => {
-            const isSelected = file.id === selectedFileId
-            return (
-              <button
-                key={file.id}
-                type="button"
-                onClick={() => onSelectFile(file.id)}
-                className={`flex items-center space-x-2 px-3 py-1.5 rounded-control text-meta font-mono transition-colors shrink-0 outline-none focus-visible:outline-2 focus-visible:outline-accent ${
-                  isSelected
-                    ? 'bg-surface text-fg font-medium border border-line shadow-xs'
-                    : 'text-fg-muted hover:text-fg hover:bg-surface/60 border border-transparent'
-                }`}
-              >
-                <FileText
-                  className={`w-3.5 h-3.5 shrink-0 ${
-                    isSelected ? 'text-accent' : 'text-fg-subtle'
-                  }`}
-                />
-                <span>{file.relativePath}</span>
-                {!file.existsOnDisk && (
-                  <span
-                    className="w-1.5 h-1.5 rounded-full bg-danger shrink-0"
-                    title="Missing on disk"
-                  />
-                )}
-              </button>
-            )
-          })}
-        </div>
-
-        {/* View Mode Segmented Control */}
-        <div className="shrink-0 my-1">
-          <SegmentedControl
-            options={viewOptions}
-            value={activeView}
-            onChange={onChangeView}
-            size="sm"
+            variant="ghost"
+            onClick={onRevealFolder}
+            className="text-fg-subtle hover:text-fg shrink-0"
           />
         </div>
+        <p className="text-meta text-fg-subtle mt-1">Watching. Updated {relativeTime(project.updatedAt)}.</p>
       </div>
-    </header>
-  )
-}
+      <Button
+        variant="primary"
+        onClick={onBackupNow}
+        isLoading={isBackingUp}
+        leftIcon={<Camera className="w-4 h-4" />}
+        title="Create an immediate encrypted snapshot"
+        className="shrink-0"
+      >
+        {isBackingUp ? 'Snapshotting...' : 'Snapshot'}
+      </Button>
+    </div>
+
+    <div className="mt-6 flex items-center justify-between gap-6 border-b border-line-subtle">
+      <div role="tablist" aria-label="Env files" className="flex items-center gap-5 overflow-x-auto scrollbar-hidden">
+        {files.map((file) => {
+          const active = file.id === selectedFileId
+          return (
+            <button
+              key={file.id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => onSelectFile(file.id)}
+              className={`${tabClass(active)} font-mono flex items-center gap-1.5`}
+            >
+              {file.relativePath}
+              {!file.existsOnDisk && (
+                <span className="w-1.5 h-1.5 rounded-full bg-danger" title="Missing on disk" />
+              )}
+            </button>
+          )
+        })}
+      </div>
+      <div role="tablist" aria-label="View" className="flex items-center gap-5 shrink-0">
+        {VIEWS.map((v) => (
+          <button
+            key={v.value}
+            type="button"
+            role="tab"
+            aria-selected={activeView === v.value}
+            onClick={() => onChangeView(v.value)}
+            className={tabClass(activeView === v.value)}
+          >
+            {v.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  </header>
+)

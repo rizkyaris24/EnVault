@@ -244,10 +244,10 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         role="dialog"
         aria-modal="true"
         aria-label="Command palette"
-        className="w-full max-w-xl bg-surface border border-line rounded-dialog shadow-xl overflow-hidden flex flex-col max-h-[70vh] select-none text-fg"
+        className="w-full max-w-xl bg-canvas rounded-dialog shadow-float overflow-hidden flex flex-col max-h-[70vh] select-none text-fg"
       >
         {/* Search Input Bar */}
-        <div className="flex items-center px-4 py-3 border-b border-line-subtle gap-3">
+        <div className="flex items-center px-5 py-4 gap-3">
           <Search className="w-4 h-4 text-fg-subtle shrink-0" />
           <input
             ref={inputRef}
@@ -289,7 +289,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                         {action.title}
                       </div>
                       {action.subtitle && (
-                        <div className="text-meta font-mono text-fg-subtle truncate">
+                        <div className="text-meta text-fg-subtle truncate">
                           {action.subtitle}
                         </div>
                       )}
@@ -304,7 +304,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="px-4 py-2 border-t border-line-subtle bg-raised/40 flex items-center justify-between text-meta text-fg-subtle">
+        <div className="px-5 py-3 flex items-center justify-between text-meta text-fg-subtle">
           <div className="flex items-center space-x-3">
             <span>↑↓ Navigate</span>
             <span>↵ Select</span>
