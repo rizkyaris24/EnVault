@@ -8,6 +8,7 @@ import {
   DiffResult,
   DiscoveredEnvFile,
   VaultStatus,
+  AppInfo,
   SecretReuseReference,
   ComputerScanSummary,
   ScanProgressPayload,
@@ -38,6 +39,19 @@ export interface EnVaultApi {
     unlock: (passphrase: string) => Promise<IPCResult>
     setPassphrase: (passphrase: string) => Promise<IPCResult>
   }
+  settings: {
+    get: (key: string) => Promise<IPCResult<string | null>>
+    set: (key: string, value: string) => Promise<IPCResult>
+  }
+  app: {
+    getInfo: () => Promise<IPCResult<AppInfo>>
+    reveal: (target: 'vault' | 'logs') => Promise<IPCResult>
+    getDiagnostics: () => Promise<IPCResult<string>>
+  }
+  vault: {
+    exportTo: (passphrase: string) => Promise<IPCResult<{ path: string } | null>>
+    importFrom: (passphrase: string) => Promise<IPCResult<{ projects: number; files: number; versions: number } | null>>
+  }
   clipboard: {
     copySecret: (text: string) => Promise<IPCResult>
   }
@@ -45,6 +59,7 @@ export interface EnVaultApi {
   onBackupUpdated: (callback: (payload: { fileId: string; projectId: string; version: any }) => void) => () => void
   onFileStatusChanged: (callback: (payload: { fileId: string; projectId: string; existsOnDisk: boolean }) => void) => () => void
   onScanProgress: (callback: (payload: ScanProgressPayload) => void) => () => void
+  onOpenSettings: (callback: () => void) => () => void
 }
 
 const api: EnVaultApi = {
@@ -71,6 +86,19 @@ const api: EnVaultApi = {
     unlock: (passphrase) => ipcRenderer.invoke(IPC_CHANNELS.VAULT_UNLOCK, passphrase),
     setPassphrase: (passphrase) => ipcRenderer.invoke(IPC_CHANNELS.VAULT_SET_PASSPHRASE, passphrase)
   },
+  settings: {
+    get: (key) => ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_GET, key),
+    set: (key, value) => ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_SET, key, value)
+  },
+  app: {
+    getInfo: () => ipcRenderer.invoke(IPC_CHANNELS.APP_GET_INFO),
+    reveal: (target) => ipcRenderer.invoke(IPC_CHANNELS.APP_REVEAL, target),
+    getDiagnostics: () => ipcRenderer.invoke(IPC_CHANNELS.APP_DIAGNOSTICS)
+  },
+  vault: {
+    exportTo: (passphrase) => ipcRenderer.invoke(IPC_CHANNELS.VAULT_EXPORT, passphrase),
+    importFrom: (passphrase) => ipcRenderer.invoke(IPC_CHANNELS.VAULT_IMPORT, passphrase)
+  },
   clipboard: {
     copySecret: (text) => ipcRenderer.invoke(IPC_CHANNELS.CLIPBOARD_COPY_SECRET, text)
   },
@@ -94,6 +122,13 @@ const api: EnVaultApi = {
     ipcRenderer.on(IPC_CHANNELS.EVENT_SCAN_PROGRESS, handler)
     return () => {
       ipcRenderer.removeListener(IPC_CHANNELS.EVENT_SCAN_PROGRESS, handler)
+    }
+  },
+  onOpenSettings: (callback) => {
+    const handler = (): void => callback()
+    ipcRenderer.on(IPC_CHANNELS.EVENT_OPEN_SETTINGS, handler)
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.EVENT_OPEN_SETTINGS, handler)
     }
   }
 }

@@ -1,4 +1,5 @@
-import { ipcMain, dialog, shell, clipboard, BrowserWindow, nativeTheme, IpcMainInvokeEvent } from 'electron'
+import { app, ipcMain, dialog, shell, clipboard, BrowserWindow, nativeTheme, IpcMainInvokeEvent } from 'electron'
+import * as os from 'os'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as crypto from 'crypto'
@@ -13,8 +14,12 @@ import { fileWatcherService } from '../services/watcher'
 import { computeEnvDiff } from '../services/diffService'
 import { parseEnv } from '../services/envParser'
 import { createClipboardGuard } from '../utils/clipboardGuard'
-import { isTrustedSenderUrl, isSafeId, parseTheme, parseAddPayload, isInside } from './validate'
-import { SecretEntry, IPCResult, Project, EnvFile, ComputerScanSummary, VaultStatus } from '../../shared/types'
+import { getLogger } from '../utils/logger'
+import { atomicWriteFileSync } from '../utils/atomicWrite'
+import { exportVault, importVault } from '../services/vaultTransfer'
+import { buildDiagnostics } from '../services/diagnostics'
+import { isTrustedSenderUrl, isSafeId, parseTheme, parseAddPayload, isInside, parseSetting, SETTING_KEYS } from './validate'
+import { SecretEntry, AppInfo, IPCResult, Project, EnvFile, ComputerScanSummary, VaultStatus } from '../../shared/types'
 
 /** Secrets copied from the UI are cleared from the clipboard after 30 seconds. */
 export const secretClipboard = createClipboardGuard(clipboard, 30_000)
@@ -256,6 +261,89 @@ export function registerIpcHandlers({ getWindow, onVaultReady }: HandlerDeps): v
       if (wasWaiting) onVaultReady()
     },
     { allowLocked: true }
+  )
+
+  // Settings (allowlisted UI settings only)
+  handle(IPC_CHANNELS.SETTINGS_GET, (_e, key: unknown): string | null => {
+    if (typeof key !== 'string' || !SETTING_KEYS.includes(key)) throw new Error('Unknown setting')
+    return vaultDB.getMeta(key)
+  })
+
+  handle(IPC_CHANNELS.SETTINGS_SET, (_e, key: unknown, value: unknown) => {
+    const setting = parseSetting(key, value)
+    if (!setting) throw new Error('Invalid setting')
+    vaultDB.setMeta(setting.key, setting.value)
+    if (setting.key === 'retention_days') vaultDB.applyRetention()
+  })
+
+  const vaultFile = (): string => path.join(app.getPath('userData'), 'envault.db')
+
+  handle(IPC_CHANNELS.APP_GET_INFO, (): AppInfo => ({
+    version: app.getVersion(),
+    platform: process.platform,
+    vaultPath: vaultFile(),
+    logPath: getLogger().path
+  }), { allowLocked: true })
+
+  handle(IPC_CHANNELS.APP_REVEAL, (_e, target: unknown) => {
+    if (target === 'vault') shell.showItemInFolder(vaultFile())
+    else if (target === 'logs' && getLogger().path) shell.showItemInFolder(getLogger().path)
+    else throw new Error('Nothing to reveal')
+  })
+
+  handle(IPC_CHANNELS.APP_DIAGNOSTICS, (): string =>
+    buildDiagnostics({
+      appVersion: app.getVersion(),
+      electron: process.versions.electron,
+      chrome: process.versions.chrome,
+      platform: process.platform,
+      arch: process.arch,
+      osRelease: os.release(),
+      vaultState: vaultCrypto.getState(),
+      keySource: vaultCrypto.getKeySource(),
+      hasRecovery: vaultCrypto.hasRecovery(),
+      schemaVersion: vaultDB.getSchemaVersion(),
+      stats: vaultDB.getStats(),
+      retentionDays: vaultDB.getMeta('retention_days') ?? '90',
+      quitOnClose: vaultDB.getMeta('quit_on_close') ?? '0',
+      logTail: getLogger().readTail(20_000)
+    })
+  )
+
+  // Vault: export everything to one passphrase-protected file
+  handle(IPC_CHANNELS.VAULT_EXPORT, async (_e, passphrase: unknown): Promise<{ path: string } | null> => {
+    if (typeof passphrase !== 'string') throw new Error('Invalid passphrase')
+    const contents = exportVault(vaultDB, vaultCrypto, passphrase) // validates the passphrase before asking for a location
+    const res = await dialog.showSaveDialog(getWindow()!, {
+      title: 'Export EnVault backup',
+      defaultPath: `EnVault-backup-${new Date().toISOString().slice(0, 10)}.envault`,
+      filters: [{ name: 'EnVault backup', extensions: ['envault'] }]
+    })
+    if (res.canceled || !res.filePath) return null
+    atomicWriteFileSync(res.filePath, contents, 'utf8')
+    getLogger().info('Vault exported')
+    return { path: res.filePath }
+  })
+
+  // Vault: replace this vault with an export file
+  handle(
+    IPC_CHANNELS.VAULT_IMPORT,
+    async (_e, passphrase: unknown): Promise<{ projects: number; files: number; versions: number } | null> => {
+      if (typeof passphrase !== 'string') throw new Error('Invalid passphrase')
+      const res = await dialog.showOpenDialog(getWindow()!, {
+        title: 'Import EnVault backup',
+        properties: ['openFile'],
+        filters: [{ name: 'EnVault backup', extensions: ['envault'] }]
+      })
+      if (res.canceled || res.filePaths.length === 0) return null
+      const file = res.filePaths[0]
+      if (fs.statSync(file).size > 500 * 1024 * 1024) throw new Error('This file is too large to be an EnVault backup')
+      const result = importVault(vaultDB, vaultCrypto, fs.readFileSync(file, 'utf8'), passphrase)
+      fileWatcherService.closeAll()
+      fileWatcherService.initAllWatchers()
+      getLogger().info('Vault imported')
+      return result
+    }
   )
 
   // Clipboard: copy a secret and auto-clear it

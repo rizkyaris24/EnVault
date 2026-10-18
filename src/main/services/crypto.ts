@@ -188,6 +188,41 @@ export class VaultCrypto {
     return Buffer.concat([decipher.update(Buffer.from(w.ct, 'base64')), decipher.final()])
   }
 
+  /** The vault key wrapped by `passphrase`, for the export file. Requires an unlocked vault. */
+  public wrapKeyForExport(passphrase: string): string {
+    this.assertPassphrase(passphrase)
+    if (!this.dek || this.state !== 'ready') throw new Error('Vault is locked')
+    return this.wrapWithPassphrase(this.dek, passphrase)
+  }
+
+  /** Checks an exported key against its passphrase and pepper without changing anything. */
+  public verifyExportedKey(wrappedKey: string, passphrase: string, pepperEnc: string): void {
+    let dek: Buffer
+    try {
+      dek = this.unwrapWithPassphrase(wrappedKey, passphrase)
+    } catch {
+      throw new Error('Incorrect passphrase')
+    }
+    this.decryptWith(dek, JSON.parse(pepperEnc))
+  }
+
+  /** Replaces this vault's key with the exported one (after the data was imported). The export passphrase becomes the recovery passphrase. */
+  public adoptExportedKey(wrappedKey: string, passphrase: string, pepperEnc: string): void {
+    if (!this.meta || !this.keystore) throw new Error('Vault is not initialized')
+    this.verifyExportedKey(wrappedKey, passphrase, pepperEnc)
+    this.dek = this.unwrapWithPassphrase(wrappedKey, passphrase)
+    this.meta.set('vault_pepper_enc', pepperEnc)
+    this.meta.set('dek_wrap_pass', wrappedKey)
+    if (this.keystore.isAvailable()) {
+      this.meta.set('encrypted_dek', this.keystore.wrap(this.dek.toString('hex')))
+      this.keySource = 'keychain'
+    } else {
+      this.meta.delete('encrypted_dek')
+      this.keySource = 'passphrase'
+    }
+    this.finalize()
+  }
+
   /** Loads (or creates) the HMAC pepper, stored encrypted under the DEK. Migrates the old plaintext pepper. */
   private finalize(): void {
     const meta = this.meta!
@@ -241,10 +276,13 @@ export class VaultCrypto {
     if (!this.dek) {
       throw new Error('VaultCrypto is not initialized: DEK is missing')
     }
+    return this.decryptWith(this.dek, payload)
+  }
 
+  private decryptWith(key: Buffer, payload: EncryptedPayload): string {
     const iv = Buffer.from(payload.iv, 'base64')
     const authTag = Buffer.from(payload.authTag, 'base64')
-    const decipher = crypto.createDecipheriv('aes-256-gcm', this.dek, iv)
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv)
     decipher.setAuthTag(authTag)
 
     let decrypted = decipher.update(payload.ciphertext, 'base64', 'utf8')

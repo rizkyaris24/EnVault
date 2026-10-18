@@ -11,7 +11,8 @@ import {
   History,
   Sun,
   Moon,
-  Monitor
+  Monitor,
+  Settings
 } from 'lucide-react'
 import { Kbd } from '../ui'
 import { useTheme } from '../../theme/useTheme'
@@ -25,6 +26,7 @@ export interface CommandPaletteProps {
   onScanComputer: () => void
   onSnapshotNow: () => void
   onChangeView: (view: 'table' | 'raw' | 'history') => void
+  onOpenSettings: () => void
 }
 
 interface PaletteAction {
@@ -45,7 +47,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   onAddProject,
   onScanComputer,
   onSnapshotNow,
-  onChangeView
+  onChangeView,
+  onOpenSettings
 }) => {
   const [query, setQuery] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)
@@ -56,8 +59,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     const list: PaletteAction[] = [
       {
         id: 'action-add-project',
-        title: 'Add Project Folder',
-        subtitle: 'Register an existing workspace directory',
+        title: 'Add folder',
+        subtitle: 'Track a project folder',
         shortcut: '⌘N',
         icon: <Plus className="w-4 h-4 text-accent" />,
         category: 'Actions',
@@ -68,8 +71,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       },
       {
         id: 'action-scan-pc',
-        title: 'Scan Computer',
-        subtitle: 'Auto-discover and ingest all .env files',
+        title: 'Scan computer',
+        subtitle: 'Find .env files in your development folders',
         shortcut: '⇧⌘S',
         icon: <Compass className="w-4 h-4 text-accent" />,
         category: 'Actions',
@@ -80,8 +83,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       },
       {
         id: 'action-snapshot',
-        title: 'Take Snapshot Now',
-        subtitle: 'Encrypt and store current local environment',
+        title: 'Take snapshot',
+        subtitle: 'Save the current file as a new version',
         icon: <Camera className="w-4 h-4 text-accent" />,
         category: 'Actions',
         run: () => {
@@ -90,8 +93,20 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         }
       },
       {
+        id: 'action-settings',
+        title: 'Open settings',
+        subtitle: 'Recovery passphrase, backups, history, theme',
+        shortcut: '⌘,',
+        icon: <Settings className="w-4 h-4 text-fg-subtle" />,
+        category: 'Actions',
+        run: () => {
+          onClose()
+          onOpenSettings()
+        }
+      },
+      {
         id: 'view-secrets',
-        title: 'Switch to Secrets Table',
+        title: 'Show secrets',
         shortcut: '⌘1',
         icon: <ListFilter className="w-4 h-4 text-fg-subtle" />,
         category: 'Actions',
@@ -102,7 +117,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       },
       {
         id: 'view-raw',
-        title: 'Switch to Raw Code View',
+        title: 'Show raw file',
         shortcut: '⌘2',
         icon: <Code className="w-4 h-4 text-fg-subtle" />,
         category: 'Actions',
@@ -113,7 +128,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       },
       {
         id: 'view-history',
-        title: 'Switch to History Timeline',
+        title: 'Show history',
         shortcut: '⌘3',
         icon: <History className="w-4 h-4 text-fg-subtle" />,
         category: 'Actions',
@@ -124,7 +139,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       },
       {
         id: 'theme-light',
-        title: 'Set Theme: Light',
+        title: 'Light theme',
         icon: <Sun className="w-4 h-4 text-fg-subtle" />,
         category: 'Appearance',
         run: () => {
@@ -134,7 +149,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       },
       {
         id: 'theme-dark',
-        title: 'Set Theme: Dark',
+        title: 'Dark theme',
         icon: <Moon className="w-4 h-4 text-fg-subtle" />,
         category: 'Appearance',
         run: () => {
@@ -144,7 +159,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       },
       {
         id: 'theme-system',
-        title: 'Set Theme: System Default',
+        title: 'System theme',
         icon: <Monitor className="w-4 h-4 text-fg-subtle" />,
         category: 'Appearance',
         run: () => {
@@ -244,7 +259,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         role="dialog"
         aria-modal="true"
         aria-label="Command palette"
-        className="w-full max-w-xl bg-canvas rounded-dialog shadow-float overflow-hidden flex flex-col max-h-[70vh] select-none text-fg"
+        className="w-full max-w-xl bg-canvas rounded-dialog shadow-float focus-visible:outline-none overflow-hidden flex flex-col max-h-[70vh] select-none text-fg"
       >
         {/* Search Input Bar */}
         <div className="flex items-center px-5 py-4 gap-3">

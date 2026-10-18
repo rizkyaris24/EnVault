@@ -11,6 +11,8 @@ import {
   VaultStatus
 } from '@shared/types'
 import { UnlockScreen } from './components/Vault/UnlockScreen'
+import { Onboarding } from './components/Onboarding/Onboarding'
+import { SettingsDialog } from './components/Settings/SettingsDialog'
 import { TopBar } from './components/TopBar/TopBar'
 import { ProjectsHome } from './components/Home/ProjectsHome'
 import { ProjectHeader } from './components/ProjectDetail/ProjectHeader'
@@ -32,6 +34,8 @@ export const App: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
   const [vaultStatus, setVaultStatus] = useState<VaultStatus | null>(null)
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [needsOnboarding, setNeedsOnboarding] = useState(false)
   const [toasts, setToasts] = useState<ToastMessage[]>([])
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false)
 
@@ -122,12 +126,24 @@ export const App: React.FC = () => {
     refreshVaultStatus()
   }, [refreshVaultStatus])
 
+  // First run: no projects yet and the welcome flow was never finished.
+  const onboardingChecked = React.useRef(false)
+  useEffect(() => {
+    if (!vaultStatus || vaultStatus.state !== 'ready' || onboardingChecked.current) return
+    onboardingChecked.current = true
+    window.envaultApi.settings.get('onboarding_done').then((res) => {
+      if (res.success && res.data == null && vaultStatus.totalProjects === 0) setNeedsOnboarding(true)
+    })
+  }, [vaultStatus])
+
+  useEffect(() => window.envaultApi.onOpenSettings(() => setIsSettingsOpen(true)), [])
+
   useEffect(() => {
     loadProjects()
 
     // Watcher event listeners
     const unbindBackup = window.envaultApi.onBackupUpdated(({ fileId }: { fileId: string; projectId: string; version: any }) => {
-      addToast('info', 'Auto-Backup Recorded', 'A change to your .env file was silently encrypted.')
+      addToast('info', 'Backup saved', 'A .env file changed and a new version was saved.')
       loadProjects()
       if (selectedFileId === fileId) {
         loadFileDetails(fileId)
@@ -136,7 +152,7 @@ export const App: React.FC = () => {
 
     const unbindStatus = window.envaultApi.onFileStatusChanged(({ fileId, existsOnDisk }: { fileId: string; projectId: string; existsOnDisk: boolean }) => {
       if (!existsOnDisk) {
-        addToast('warning', 'File Missing on Disk', 'A .env file was removed from the project folder.')
+        addToast('warning', 'File missing', 'A .env file was removed from its folder. You can restore it from History.')
       }
       loadProjects()
       if (selectedFileId === fileId) {
@@ -225,7 +241,7 @@ export const App: React.FC = () => {
       setDiscoveredFiles(scanRes.data)
       setIsImportModalOpen(true)
     } else {
-      addToast('error', 'Failed to scan directory', scanRes.error)
+      addToast('error', 'Could not scan the folder', scanRes.error)
     }
   }, [])
 
@@ -242,13 +258,13 @@ export const App: React.FC = () => {
       setIsImportModalOpen(false)
       addToast(
         'success',
-        'Project Registered',
-        `Tracking ${selectedPaths.length} .env file(s) with passive backup.`
+        'Project added',
+        `Tracking ${selectedPaths.length} ${selectedPaths.length === 1 ? 'file' : 'files'}.`
       )
       await loadProjects()
       setSelectedProjectId(addRes.data.id)
     } else {
-      addToast('error', 'Could not register project', addRes.error)
+      addToast('error', 'Could not add project', addRes.error)
     }
   }
 
@@ -268,17 +284,17 @@ export const App: React.FC = () => {
     try {
       const res = await window.envaultApi.projects.remove(id)
       if (res.success) {
-        addToast('info', 'Project Removed', `Removed ${name} from EnVault.`)
+        addToast('info', 'Project removed', `${name} is no longer tracked.`)
         const updated = projects.filter((p) => p.id !== id)
         setProjects(updated)
         setSelectedProjectId(null)
         setDeleteModal({ isOpen: false, project: null, isLoading: false })
       } else {
-        addToast('error', 'Failed to Remove Project', res.error)
+        addToast('error', 'Could not remove project', res.error)
         setDeleteModal((prev) => ({ ...prev, isLoading: false }))
       }
     } catch (err) {
-      addToast('error', 'Error', (err as Error).message)
+      addToast('error', 'Something went wrong', (err as Error).message)
       setDeleteModal((prev) => ({ ...prev, isLoading: false }))
     }
   }
@@ -377,7 +393,7 @@ export const App: React.FC = () => {
     setIsBackingUp(false)
 
     if (res.success) {
-      addToast('success', 'Manual Snapshot Created', 'New encrypted snapshot saved to vault.')
+      addToast('success', 'Snapshot saved', 'A new version was added to history.')
       loadFileDetails(selectedFileId)
       loadProjects()
     } else {
@@ -402,7 +418,7 @@ export const App: React.FC = () => {
         versionBName: `v${latest.versionNumber} (Current)`
       })
     } else {
-      addToast('error', 'Failed to generate diff', diffRes.error)
+      addToast('error', 'Could not compare versions', diffRes.error)
     }
   }
 
@@ -433,8 +449,8 @@ export const App: React.FC = () => {
     if (res.success && res.data) {
       addToast(
         'success',
-        'Restored Successfully',
-        `Wrote snapshot v${res.data.versionNumber} back to ${res.data.targetPath}`
+        'File restored',
+        `Snapshot v${res.data.versionNumber} was written back to disk.`
       )
       if (selectedFileId) {
         loadFileDetails(selectedFileId)
@@ -461,6 +477,21 @@ export const App: React.FC = () => {
     )
   }
 
+  if (needsOnboarding) {
+    return (
+      <Onboarding
+        hasRecovery={vaultStatus.hasRecovery}
+        onFinish={async (next) => {
+          await window.envaultApi.settings.set('onboarding_done', '1')
+          setNeedsOnboarding(false)
+          refreshVaultStatus()
+          if (next === 'add') handleAddProject()
+          if (next === 'scan') handleScanComputer()
+        }}
+      />
+    )
+  }
+
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-canvas text-fg font-sans select-none">
       <TopBar
@@ -471,6 +502,7 @@ export const App: React.FC = () => {
         onAddProject={handleAddProject}
         onScanComputer={handleScanComputer}
         onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
+        onOpenSettings={() => setIsSettingsOpen(true)}
       />
 
       <main className="flex-1 flex flex-col overflow-hidden bg-canvas">
@@ -528,7 +560,7 @@ export const App: React.FC = () => {
                     rawContent={rawContent}
                     onCopyAll={(content) => {
                       window.envaultApi.clipboard.copySecret(content)
-                      addToast('info', 'Copied File', 'Copied full .env contents.')
+                      addToast('info', 'Copied', 'The whole file was copied. It clears from the clipboard in 30 seconds.')
                     }}
                   />
                 )}
@@ -616,6 +648,19 @@ export const App: React.FC = () => {
         onScanComputer={handleScanComputer}
         onSnapshotNow={handleBackupNow}
         onChangeView={(v) => setActiveView(v)}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+      />
+
+      <SettingsDialog
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        status={vaultStatus}
+        onVaultChanged={() => {
+          refreshVaultStatus()
+          loadProjects()
+          setSelectedProjectId(null)
+        }}
+        notify={addToast}
       />
 
       {/* Toast notifications */}

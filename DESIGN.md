@@ -32,7 +32,7 @@ Single source: `src/renderer/src/styles/globals.css`. `useTheme.tsx` only toggle
 | `--raised` | `#F4F4F5` | `#1A1A1D` |
 | `--line-subtle` | `#F0F0F2` | `#1C1C1F` |
 | `--line` | `#E6E6E9` | `#26262A` |
-| `--line-strong` | `#8E8E97` | `#4A4A52` |
+| `--line-strong` | `#8E8E97` | `#6B6B75` |
 | `--fg` | `#0B0B0C` | `#F2F2F3` |
 | `--fg-muted` | `#5E5E66` | `#A4A4AC` |
 | `--fg-subtle` | `#6F6F78` | `#8E8E97` |

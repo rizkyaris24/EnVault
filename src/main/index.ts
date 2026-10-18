@@ -1,4 +1,4 @@
-import { app, shell, dialog, session, BrowserWindow, nativeTheme } from 'electron'
+import { app, shell, dialog, session, screen, BrowserWindow, nativeTheme } from 'electron'
 import { join } from 'path'
 import { vaultDB, VaultCorruptError } from './services/db'
 import { vaultCrypto, electronKeyStore } from './services/crypto'
@@ -6,15 +6,23 @@ import { fileWatcherService } from './services/watcher'
 import { registerIpcHandlers, secretClipboard } from './ipc/handlers'
 import { isSameAppPage } from './ipc/validate'
 import { getLogger } from './utils/logger'
+import { installAppMenu } from './menu'
+import { IPC_CHANNELS } from '../shared/ipcChannels'
+import { loadWindowState, saveWindowState, fitToDisplays, MIN_WIDTH, MIN_HEIGHT } from './utils/windowState'
 
 let mainWindow: BrowserWindow | null = null
 
 function createWindow(): void {
+  const stateFile = join(app.getPath('userData'), 'window-state.json')
+  const saved = loadWindowState(stateFile)
+  const bounds = saved
+    ? fitToDisplays(saved, screen.getAllDisplays().map((d) => d.workArea))
+    : { width: 1160, height: 760 }
+
   mainWindow = new BrowserWindow({
-    width: 1160,
-    height: 760,
-    minWidth: 860,
-    minHeight: 560,
+    ...bounds,
+    minWidth: MIN_WIDTH,
+    minHeight: MIN_HEIGHT,
     show: false,
     autoHideMenuBar: true,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
@@ -40,6 +48,18 @@ function createWindow(): void {
     return { action: 'deny' }
   })
 
+  let saveTimer: NodeJS.Timeout | null = null
+  const persistBounds = (): void => {
+    if (saveTimer) clearTimeout(saveTimer)
+    saveTimer = setTimeout(() => {
+      if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isMinimized()) {
+        saveWindowState(stateFile, mainWindow.getNormalBounds())
+      }
+    }, 500)
+  }
+  mainWindow.on('resize', persistBounds)
+  mainWindow.on('move', persistBounds)
+
   mainWindow.on('closed', () => {
     mainWindow = null
     fileWatcherService.setMainWindow(null)
@@ -62,7 +82,7 @@ nativeTheme.on('updated', () => {
 /** Runs once the vault key is available: apply retention, then start passive watching. */
 function startVaultServices(): void {
   try {
-    vaultDB.pruneAllVersions()
+    vaultDB.applyRetention()
   } catch (err) {
     getLogger().error('Version retention failed', err)
   }
@@ -118,6 +138,18 @@ if (gotSingleInstanceLock) app.whenReady().then(() => {
     return
   }
 
+  installAppMenu({
+    openSettings: () => {
+      if (!mainWindow) createWindow()
+      mainWindow?.webContents.send(IPC_CHANNELS.EVENT_OPEN_SETTINGS)
+    },
+    revealLogs: () => {
+      const p = getLogger().path
+      if (p) shell.showItemInFolder(p)
+    },
+    isDev: !app.isPackaged
+  })
+
   registerIpcHandlers({
     getWindow: () => mainWindow,
     onVaultReady: startVaultServices
@@ -134,7 +166,7 @@ if (gotSingleInstanceLock) app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   // The DB and watchers stay open on macOS so reopening the window works; before-quit does the cleanup.
-  if (process.platform !== 'darwin') app.quit()
+  if (process.platform !== 'darwin' || vaultDB.getMeta('quit_on_close') === '1') app.quit()
 })
 
 app.on('before-quit', () => {

@@ -75,7 +75,7 @@ export class BackupService {
       }
     })
 
-    vaultDB.pruneVersions(file.id)
+    vaultDB.applyRetention(file.id)
 
     return { version: newVersion, skippedDuplicate: false }
   }

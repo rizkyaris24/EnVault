@@ -1,8 +1,7 @@
 import React from 'react'
 import { Project } from '@shared/types'
-import { Sun, Moon, Monitor, Search } from 'lucide-react'
+import { Settings, Search } from 'lucide-react'
 import { IconButton, Kbd } from '../ui'
-import { useTheme, ThemePreference } from '../../theme/useTheme'
 import { ProjectSwitcher } from './ProjectSwitcher'
 
 interface TopBarProps {
@@ -13,12 +12,7 @@ interface TopBarProps {
   onAddProject: () => void
   onScanComputer: () => void
   onOpenCommandPalette: () => void
-}
-
-const NEXT_THEME: Record<ThemePreference, ThemePreference> = {
-  system: 'light',
-  light: 'dark',
-  dark: 'system'
+  onOpenSettings: () => void
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
@@ -28,11 +22,9 @@ export const TopBar: React.FC<TopBarProps> = ({
   onSelectProject,
   onAddProject,
   onScanComputer,
-  onOpenCommandPalette
+  onOpenCommandPalette,
+  onOpenSettings
 }) => {
-  const { theme, setTheme } = useTheme()
-  const ThemeIcon = theme === 'light' ? Sun : theme === 'dark' ? Moon : Monitor
-
   return (
     <header className="titlebar-drag-region h-12 shrink-0 flex items-center justify-between pl-20 pr-4 select-none">
       <div className="flex items-center gap-1 min-w-0">
@@ -70,10 +62,10 @@ export const TopBar: React.FC<TopBarProps> = ({
           <Kbd shortcut="⌘K" />
         </button>
         <IconButton
-          icon={<ThemeIcon className="w-4 h-4" />}
-          label={`Theme: ${theme}. Click to change`}
+          icon={<Settings className="w-4 h-4" />}
+          label="Settings"
           variant="ghost"
-          onClick={() => setTheme(NEXT_THEME[theme])}
+          onClick={onOpenSettings}
           className="text-fg-subtle hover:text-fg"
         />
       </div>

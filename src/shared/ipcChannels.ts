@@ -25,6 +25,15 @@ export const IPC_CHANNELS = {
   VAULT_UNLOCK: 'vault:unlock',
   VAULT_SET_PASSPHRASE: 'vault:setPassphrase',
 
+  // App, settings and vault transfer
+  SETTINGS_GET: 'settings:get',
+  SETTINGS_SET: 'settings:set',
+  APP_GET_INFO: 'app:getInfo',
+  APP_REVEAL: 'app:reveal',
+  APP_DIAGNOSTICS: 'app:diagnostics',
+  VAULT_EXPORT: 'vault:export',
+  VAULT_IMPORT: 'vault:import',
+
   // Clipboard
   CLIPBOARD_COPY_SECRET: 'clipboard:copySecret',
 
@@ -34,5 +43,6 @@ export const IPC_CHANNELS = {
   // Events (Main -> Renderer)
   EVENT_BACKUP_UPDATED: 'event:backupUpdated',
   EVENT_FILE_STATUS_CHANGED: 'event:fileStatusChanged',
-  EVENT_SCAN_PROGRESS: 'event:scanProgress'
+  EVENT_SCAN_PROGRESS: 'event:scanProgress',
+  EVENT_OPEN_SETTINGS: 'event:openSettings'
 } as const
