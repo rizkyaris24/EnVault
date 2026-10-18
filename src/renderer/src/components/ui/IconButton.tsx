@@ -17,7 +17,7 @@ export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
 
     const variantStyles = {
       ghost: 'bg-transparent text-fg-muted hover:text-fg hover:bg-raised active:bg-line-subtle',
-      secondary: 'bg-surface text-fg border border-line hover:bg-raised active:bg-line-subtle',
+      secondary: 'bg-raised text-fg hover:bg-line active:bg-line',
       danger: 'bg-transparent text-danger hover:bg-danger/10 active:bg-danger/20'
     }
 

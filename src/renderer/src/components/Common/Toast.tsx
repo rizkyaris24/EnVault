@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react'
-import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react'
+import { X } from 'lucide-react'
 
 export interface ToastMessage {
   id: string
@@ -51,24 +51,24 @@ const ToastItem: React.FC<{ toast: ToastMessage; onDismiss: (id: string) => void
     return () => clearTimer()
   }, [toast.id, onDismiss])
 
-  const iconMap = {
-    success: <CheckCircle2 className="w-4 h-4 text-success shrink-0" />,
-    warning: <AlertCircle className="w-4 h-4 text-warn shrink-0" />,
-    error: <AlertCircle className="w-4 h-4 text-danger shrink-0" />,
-    info: <Info className="w-4 h-4 text-accent shrink-0" />
+  const dotColor = {
+    success: 'bg-success',
+    warning: 'bg-warn',
+    error: 'bg-danger',
+    info: 'bg-fg-subtle'
   }
 
   return (
     <div
       onMouseEnter={clearTimer}
       onMouseLeave={startTimer}
-      className="pointer-events-auto flex items-start space-x-3 p-3 rounded-control border border-line bg-surface text-fg shadow-lg animate-fade-in transition-all select-none"
+      className="pointer-events-auto flex items-start gap-3 px-4 py-3 rounded-dialog bg-canvas text-fg shadow-float animate-fade-in select-none"
     >
-      {iconMap[toast.type]}
-      <div className="flex-1 text-meta min-w-0">
+      <span className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${dotColor[toast.type]}`} />
+      <div className="flex-1 text-ui min-w-0">
         <div className="font-medium text-fg truncate">{toast.title}</div>
         {toast.message && (
-          <div className="text-fg-muted mt-0.5 leading-snug">{toast.message}</div>
+          <div className="text-meta text-fg-muted mt-0.5 leading-snug">{toast.message}</div>
         )}
       </div>
       <button

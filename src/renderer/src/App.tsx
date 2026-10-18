@@ -6,11 +6,11 @@ import {
   SecretEntry,
   DiscoveredEnvFile,
   DiffResult,
-  VaultStatus,
   ComputerScanSummary,
   ScanProgressPayload
 } from '@shared/types'
-import { Sidebar } from './components/Sidebar/Sidebar'
+import { TopBar } from './components/TopBar/TopBar'
+import { ProjectsHome } from './components/Home/ProjectsHome'
 import { ProjectHeader } from './components/ProjectDetail/ProjectHeader'
 import { MissingFileBanner } from './components/ProjectDetail/MissingFileBanner'
 import { SecretTable } from './components/ProjectDetail/SecretTable'
@@ -23,18 +23,12 @@ import { ComputerScanModal } from './components/Modals/ComputerScanModal'
 import { DeleteProjectModal } from './components/Modals/DeleteProjectModal'
 import { ToastContainer, ToastMessage } from './components/Common/Toast'
 import { CommandPalette } from './components/Common/CommandPalette'
-import { Button, Kbd } from './components/ui'
-import {
-  Plus,
-  Compass,
-  FileCode
-} from 'lucide-react'
+import { Button } from './components/ui'
 
 export const App: React.FC = () => {
   // Global State
   const [projects, setProjects] = useState<Project[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
-  const [vaultStatus, setVaultStatus] = useState<VaultStatus | null>(null)
   const [toasts, setToasts] = useState<ToastMessage[]>([])
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false)
 
@@ -113,22 +107,11 @@ export const App: React.FC = () => {
     const res = await window.envaultApi.projects.list()
     if (res.success && res.data) {
       setProjects(res.data)
-      if (!selectedProjectId && res.data.length > 0) {
-        setSelectedProjectId(res.data[0].id)
-      }
-    }
-  }, [selectedProjectId])
-
-  const loadVaultStatus = useCallback(async (): Promise<void> => {
-    const res = await window.envaultApi.security.getStatus()
-    if (res.success && res.data) {
-      setVaultStatus(res.data)
     }
   }, [])
 
   useEffect(() => {
     loadProjects()
-    loadVaultStatus()
 
     // Watcher event listeners
     const unbindBackup = window.envaultApi.onBackupUpdated(({ fileId }: { fileId: string; projectId: string; version: any }) => {
@@ -158,7 +141,7 @@ export const App: React.FC = () => {
       unbindStatus()
       unbindScanProgress()
     }
-  }, [loadProjects, loadVaultStatus, selectedFileId])
+  }, [loadProjects, selectedFileId])
 
   // Load files when selected project changes
   useEffect(() => {
@@ -276,7 +259,7 @@ export const App: React.FC = () => {
         addToast('info', 'Project Removed', `Removed ${name} from EnVault.`)
         const updated = projects.filter((p) => p.id !== id)
         setProjects(updated)
-        setSelectedProjectId(updated.length > 0 ? updated[0].id : null)
+        setSelectedProjectId(null)
         setDeleteModal({ isOpen: false, project: null, isLoading: false })
       } else {
         addToast('error', 'Failed to Remove Project', res.error)
@@ -304,7 +287,6 @@ export const App: React.FC = () => {
         summary: res.data!
       }))
       await loadProjects()
-      await loadVaultStatus()
     } else {
       setComputerScanModal({
         isOpen: false,
@@ -314,7 +296,7 @@ export const App: React.FC = () => {
       })
       addToast('error', 'Computer scan failed', res.error)
     }
-  }, [loadProjects, loadVaultStatus])
+  }, [loadProjects])
 
   // Global keyboard shortcuts (Jakob's Law)
   useEffect(() => {
@@ -333,6 +315,12 @@ export const App: React.FC = () => {
       }
 
       if (!isInput) {
+        // Escape: back to all projects when nothing else is open
+        if (e.key === 'Escape' && !document.querySelector('[role="dialog"]')) {
+          setSelectedProjectId(null)
+          return
+        }
+
         // Cmd+N: Add Project Folder
         if (cmdOrCtrl && e.key.toLowerCase() === 'n') {
           e.preventDefault()
@@ -449,21 +437,18 @@ export const App: React.FC = () => {
   const selectedFile = files.find((f) => f.id === selectedFileId)
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-canvas text-fg font-sans select-none">
-      {/* Sidebar */}
-      <Sidebar
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-canvas text-fg font-sans select-none">
+      <TopBar
         projects={projects}
-        selectedProjectId={selectedProjectId}
-        vaultStatus={vaultStatus}
+        selectedProject={selectedProject}
+        onGoHome={() => setSelectedProjectId(null)}
         onSelectProject={(id) => setSelectedProjectId(id)}
         onAddProject={handleAddProject}
         onScanComputer={handleScanComputer}
-        onDeleteProject={handleDeleteProject}
         onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
       />
 
-      {/* Main Content Area */}
-      <main className="flex-1 flex flex-col h-full overflow-hidden bg-canvas">
+      <main className="flex-1 flex flex-col overflow-hidden bg-canvas">
         {selectedProject ? (
           <>
             <ProjectHeader
@@ -491,18 +476,13 @@ export const App: React.FC = () => {
             {/* View content based on activeView */}
             {files.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center p-8 text-center select-none max-w-md mx-auto">
-                <FileCode className="w-8 h-8 text-fg-subtle mb-3 opacity-60" />
-                <h2 className="text-title font-semibold text-fg">No .env files tracked in this project</h2>
-                <p className="text-meta text-fg-muted mt-1 leading-relaxed">
-                  Create a .env file in this directory or snapshot to begin passive tracking.
+                <h2 className="text-title font-medium text-fg">No .env files in this project yet</h2>
+                <p className="text-ui text-fg-muted mt-1">
+                  Create one in the folder and EnVault picks it up, or take a snapshot now.
                 </p>
-                <div className="mt-5">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={handleBackupNow}
-                  >
-                    Snapshot Now
+                <div className="mt-6">
+                  <Button variant="secondary" onClick={handleBackupNow}>
+                    Snapshot now
                   </Button>
                 </div>
               </div>
@@ -540,45 +520,13 @@ export const App: React.FC = () => {
             )}
           </>
         ) : (
-          /* Empty State — Utilitarian, Minimalist */
-          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center select-none max-w-lg mx-auto">
-            <h1 className="text-display font-semibold text-fg tracking-tight">
-              EnVault
-            </h1>
-            <p className="text-ui text-fg-muted mt-2 leading-relaxed max-w-md">
-              Passive, encrypted, and versioned backups for local environment configurations.
-            </p>
-
-            <div className="flex items-center gap-3 mt-6">
-              <Button
-                variant="primary"
-                size="md"
-                onClick={handleAddProject}
-                leftIcon={<Plus className="w-4 h-4" />}
-                rightIcon={<Kbd shortcut="⌘N" />}
-              >
-                Add Project Folder
-              </Button>
-
-              <Button
-                variant="secondary"
-                size="md"
-                onClick={handleScanComputer}
-                leftIcon={<Compass className="w-4 h-4 text-accent" />}
-                rightIcon={<Kbd shortcut="⇧⌘S" />}
-              >
-                Scan Computer
-              </Button>
-            </div>
-
-            <div className="mt-10 pt-6 border-t border-line-subtle w-full flex items-center justify-center gap-6 text-meta text-fg-subtle">
-              <span>AES-256-GCM encrypted</span>
-              <span>•</span>
-              <span>OS Keychain protected</span>
-              <span>•</span>
-              <span>100% offline</span>
-            </div>
-          </div>
+          <ProjectsHome
+            projects={projects}
+            onSelectProject={(id) => setSelectedProjectId(id)}
+            onAddProject={handleAddProject}
+            onScanComputer={handleScanComputer}
+            onDeleteProject={handleDeleteProject}
+          />
         )}
       </main>
 

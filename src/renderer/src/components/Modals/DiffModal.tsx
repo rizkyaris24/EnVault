@@ -1,7 +1,6 @@
 import React, { useState } from 'react'
 import { DiffResult, DiffEntry } from '@shared/types'
-import { Eye, EyeOff, CheckCircle2 } from 'lucide-react'
-import { Dialog, Button, Badge } from '../ui'
+import { Dialog, Button } from '../ui'
 
 interface DiffModalProps {
   isOpen: boolean
@@ -25,139 +24,68 @@ export const DiffModal: React.FC<DiffModalProps> = ({
 
   if (!isOpen || !diff) return null
 
-  const displayedEntries = hideUnchanged
+  const entries = hideUnchanged
     ? diff.entries.filter((e: DiffEntry) => e.status !== 'unchanged')
     : diff.entries
+  const mask = (v?: string): string => (showValues ? (v ?? '') : '••••••••••••')
+  const { added, removed, modified, unchanged } = diff.summary
 
   return (
     <Dialog
       isOpen={isOpen}
       onClose={onClose}
-      title={`Version Diff — ${fileTitle}`}
-      description={`Comparing ${versionAName} with ${versionBName}`}
+      title={`${fileTitle}: ${versionAName} vs ${versionBName}`}
+      description={`${added} added, ${removed} removed, ${modified} modified, ${unchanged} unchanged`}
       maxWidth="lg"
       footer={
-        <Button variant="secondary" onClick={onClose}>
+        <Button variant="primary" onClick={onClose}>
           Close
         </Button>
       }
     >
-      <div className="space-y-4">
-        {/* Diff Summary Bar & Controls */}
-        <div className="flex items-center justify-between pb-3 border-b border-line-subtle text-meta">
-          <div className="flex items-center space-x-2 flex-wrap gap-y-1">
-            <Badge variant="success">+{diff.summary.added} added</Badge>
-            <Badge variant="danger">-{diff.summary.removed} removed</Badge>
-            <Badge variant="warn">~{diff.summary.modified} modified</Badge>
-            <span className="text-fg-subtle font-mono ml-1">
-              {diff.summary.unchanged} unchanged
-            </span>
-          </div>
+      <div className="flex items-center justify-end gap-2 -mt-1 mb-2">
+        <Button size="sm" variant="ghost" onClick={() => setHideUnchanged(!hideUnchanged)}>
+          {hideUnchanged ? 'Show unchanged' : 'Hide unchanged'}
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => setShowValues(!showValues)}>
+          {showValues ? 'Mask values' : 'Reveal values'}
+        </Button>
+      </div>
 
-          <div className="flex items-center space-x-3">
-            <label className="flex items-center space-x-2 cursor-pointer text-fg-muted hover:text-fg select-none text-meta">
-              <input
-                type="checkbox"
-                checked={hideUnchanged}
-                onChange={(e) => setHideUnchanged(e.target.checked)}
-                className="rounded-chip bg-raised border-line text-accent focus:ring-0 w-3.5 h-3.5"
-              />
-              <span>Hide unchanged</span>
-            </label>
-
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => setShowValues(!showValues)}
-              leftIcon={
-                showValues ? (
-                  <EyeOff className="w-3.5 h-3.5 text-accent" />
-                ) : (
-                  <Eye className="w-3.5 h-3.5" />
-                )
-              }
-            >
-              {showValues ? 'Mask Values' : 'Reveal Values'}
-            </Button>
-          </div>
-        </div>
-
-        {/* Diff Entries List */}
-        <div className="space-y-2 font-mono text-ui select-text max-h-[50vh] overflow-y-auto">
-          {displayedEntries.length === 0 ? (
-            <div className="text-center py-16 text-fg-subtle">
-              <CheckCircle2 className="w-7 h-7 text-accent mx-auto mb-2 opacity-60" />
-              <p className="text-ui text-fg-muted">No differences detected between these snapshots.</p>
-            </div>
-          ) : (
-            displayedEntries.map((entry: DiffEntry) => {
-              const mask = (v?: string): string =>
-                showValues ? (v ?? '') : '••••••••••••••••'
-
-              if (entry.status === 'added') {
-                return (
-                  <div
-                    key={entry.key}
-                    className="p-3 rounded-control bg-raised border border-success/30 flex flex-col space-y-1"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-success">+ {entry.key}</span>
-                      <Badge variant="success">ADDED</Badge>
-                    </div>
-                    <div className="text-fg-muted truncate text-meta">
-                      = {mask(entry.newValue)}
-                    </div>
-                  </div>
-                )
-              }
-
-              if (entry.status === 'removed') {
-                return (
-                  <div
-                    key={entry.key}
-                    className="p-3 rounded-control bg-raised border border-danger/30 flex flex-col space-y-1"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-danger line-through">- {entry.key}</span>
-                      <Badge variant="danger">REMOVED</Badge>
-                    </div>
-                    <div className="text-fg-subtle line-through truncate text-meta">
-                      = {mask(entry.oldValue)}
-                    </div>
-                  </div>
-                )
-              }
-
-              if (entry.status === 'modified') {
-                return (
-                  <div
-                    key={entry.key}
-                    className="p-3 rounded-control bg-raised border border-warn/30 flex flex-col space-y-1.5"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-warn">~ {entry.key}</span>
-                      <Badge variant="warn">MODIFIED</Badge>
-                    </div>
-                    <div className="space-y-0.5 text-meta">
-                      <div className="text-danger line-through truncate">- {mask(entry.oldValue)}</div>
-                      <div className="text-success truncate">+ {mask(entry.newValue)}</div>
-                    </div>
-                  </div>
-                )
-              }
-
+      <div className="font-mono text-ui select-text max-h-[50vh] overflow-y-auto">
+        {entries.length === 0 ? (
+          <p className="text-center py-12 font-sans text-ui text-fg-subtle">No differences between these snapshots.</p>
+        ) : (
+          entries.map((entry: DiffEntry) => {
+            if (entry.status === 'unchanged') {
               return (
-                <div
-                  key={entry.key}
-                  className="px-3 py-2 rounded-control bg-surface border border-line-subtle text-fg-muted flex items-center justify-between"
-                >
-                  <span className="text-fg-muted">{entry.key}</span>
-                  <span className="text-fg-subtle truncate max-w-xs">{mask(entry.oldValue)}</span>
+                <div key={entry.key} className="py-1.5 text-fg-subtle flex justify-between gap-4">
+                  <span>{entry.key}</span>
+                  <span className="truncate">{mask(entry.oldValue)}</span>
                 </div>
               )
-            })
-          )}
-        </div>
+            }
+            const color =
+              entry.status === 'added' ? 'text-success' : entry.status === 'removed' ? 'text-danger' : 'text-warn'
+            const sign = entry.status === 'added' ? '+' : entry.status === 'removed' ? '-' : '~'
+            return (
+              <div key={entry.key} className="py-2">
+                <div className={`font-medium ${color}`}>
+                  {sign} {entry.key}
+                </div>
+                <div className="text-meta text-fg-muted truncate">
+                  {entry.status === 'modified' ? (
+                    <>
+                      {mask(entry.oldValue)} <span className="text-fg-subtle">to</span> {mask(entry.newValue)}
+                    </>
+                  ) : (
+                    mask(entry.status === 'added' ? entry.newValue : entry.oldValue)
+                  )}
+                </div>
+              </div>
+            )
+          })
+        )}
       </div>
     </Dialog>
   )

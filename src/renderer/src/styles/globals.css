@@ -2,73 +2,53 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --canvas: #0B0B0C;
-  --surface: #111113;
-  --raised: #17171A;
-  --line-subtle: #232327;
-  --line: #2E2E33;
-  --line-strong: #3F3F46;
-  --fg: #ECECEE;
-  --fg-muted: #A1A1AA;
-  --fg-subtle: #8B8B94;
-  --accent: #6E9BFF;
-  --accent-hover: #5A8AF5;
-  --on-accent: #0B0B0C;
-  --danger: #F2686D;
-  --success: #4CC38A;
-  --warn: #F5A524;
-  color-scheme: dark;
-}
-
-:root[data-theme="dark"],
-html[data-theme="dark"],
-html.dark,
-.dark {
-  --canvas: #0B0B0C;
-  --surface: #111113;
-  --raised: #17171A;
-  --line-subtle: #232327;
-  --line: #2E2E33;
-  --line-strong: #3F3F46;
-  --fg: #ECECEE;
-  --fg-muted: #A1A1AA;
-  --fg-subtle: #8B8B94;
-  --accent: #6E9BFF;
-  --accent-hover: #5A8AF5;
-  --on-accent: #0B0B0C;
-  --danger: #F2686D;
-  --success: #4CC38A;
-  --warn: #F5A524;
-  color-scheme: dark;
-}
-
+/* Single source of truth for theme tokens; useTheme only toggles data-theme. */
+:root,
 :root[data-theme="light"],
-html[data-theme="light"],
-html.light,
-.light {
-  --canvas: #FAFAFA;
-  --surface: #FFFFFF;
+html.light {
+  --canvas: #FFFFFF;
+  --surface: #FAFAFA;
   --raised: #F4F4F5;
-  --line-subtle: #E4E4E7;
-  --line: #D4D4D8;
-  --line-strong: #A1A1AA;
-  --fg: #18181B;
-  --fg-muted: #52525B;
-  --fg-subtle: #6B6B74;
+  --line-subtle: #F0F0F2;
+  --line: #E6E6E9;
+  --line-strong: #8E8E97;
+  --fg: #0B0B0C;
+  --fg-muted: #5E5E66;
+  --fg-subtle: #6F6F78;
   --accent: #2F5FD0;
   --accent-hover: #2550B5;
   --on-accent: #FFFFFF;
   --danger: #CE2C31;
   --success: #18794E;
   --warn: #AD5700;
+  --shadow-float: 0 8px 32px rgba(0, 0, 0, 0.08);
   color-scheme: light;
+}
+
+:root[data-theme="dark"],
+html.dark {
+  --canvas: #0B0B0C;
+  --surface: #121214;
+  --raised: #1A1A1D;
+  --line-subtle: #1C1C1F;
+  --line: #26262A;
+  --line-strong: #4A4A52;
+  --fg: #F2F2F3;
+  --fg-muted: #A4A4AC;
+  --fg-subtle: #8E8E97;
+  --accent: #6E9BFF;
+  --accent-hover: #5A8AF5;
+  --on-accent: #0B0B0C;
+  --danger: #F2686D;
+  --success: #4CC38A;
+  --warn: #F5A524;
+  --shadow-float: 0 8px 32px rgba(0, 0, 0, 0.5);
+  color-scheme: dark;
 }
 
 /* Base typography and body reset */
 body {
-  font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  font-family: "Geist Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   background-color: var(--canvas);
   color: var(--fg);
   text-rendering: optimizeLegibility;
@@ -76,7 +56,7 @@ body {
 }
 
 code, kbd, samp, pre {
-  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 /* Subtle, uncolored scrollbars */
@@ -111,6 +91,12 @@ code, kbd, samp, pre {
   }
   .titlebar-no-drag {
     -webkit-app-region: no-drag;
+  }
+  .scrollbar-hidden {
+    scrollbar-width: none;
+  }
+  .scrollbar-hidden::-webkit-scrollbar {
+    display: none;
   }
 }
 

@@ -102,13 +102,16 @@ export class VaultDB {
   // Projects
   public getProjects(): Project[] {
     const rows = this.client.prepare(`
-      SELECT 
-        p.*,
+      SELECT
+        p.id, p.name, p.path,
+        p.created_at as createdAt,
+        COALESCE(MAX(ev.created_at), p.updated_at) as updatedAt,
         COUNT(DISTINCT ef.id) as fileCount
       FROM projects p
       LEFT JOIN env_files ef ON ef.project_id = p.id AND ef.is_active = 1
+      LEFT JOIN env_versions ev ON ev.env_file_id = ef.id
       GROUP BY p.id
-      ORDER BY p.updated_at DESC
+      ORDER BY updatedAt DESC
     `).all() as Array<Project & { fileCount: number }>
 
     return rows
