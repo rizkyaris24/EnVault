@@ -18,7 +18,7 @@ EnVault follows an **Operate-mode** design philosophy based on the [Impeccable](
 
 - **Zero AI Slop**: Free of decorative glowing shadows, pulsing dots, bounce scale animations, glassmorphism, or marketing cards.
 - **Calm Ledger Aesthetic**: Neutral monochrome surface ladder (`canvas`, `surface`, `raised`, `line`, `fg`) accented by a single high-contrast blue signal (`#6E9BFF` dark / `#2F5FD0` light).
-- **Bundled Offline Typography**: Packaged IBM Plex Sans for interface text and IBM Plex Mono for secrets and hashes, completely offline with zero external network dependencies.
+- **Bundled Offline Typography**: Packaged Geist Sans for interface text and Geist Mono for secrets and hashes, completely offline with zero external network dependencies.
 - **Strict 12px Font Floor**: Eliminates unreadable micro-text, maintaining a strict 12px minimum across all metadata, badges, and labels.
 - **Theme Support**: Seamless System, Light, and Dark modes with instant toggle and Electron native chrome synchronization.
 - **WCAG AA Compliant**: All text and control contrast ratios exceed 4.5:1 (minimum 5.3:1 dark, 4.8:1 light).
@@ -143,7 +143,7 @@ npm run build:win
 - **Framework**: Electron 34
 - **Build Tooling**: electron-vite, Vite 6
 - **Frontend**: React 18, TypeScript, Tailwind CSS
-- **Typography**: IBM Plex Sans, IBM Plex Mono (bundled locally via Fontsource)
+- **Typography**: Geist Sans, Geist Mono (bundled locally via Fontsource)
 - **Database**: SQLite 3 via `better-sqlite3`
 - **File Watching**: Chokidar
 - **Testing**: Vitest
@@ -152,4 +152,4 @@ npm run build:win
 
 ## License
 
-MIT (c) EnVault Team
+MIT (c) 2026 Rizky Amanatama

@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "A passive, encrypted, versioned backup system for .env files",
   "main": "./out/main/index.js",
-  "author": "EnVault Team",
+  "author": "Rizky Amanatama",
   "license": "MIT",
   "scripts": {
     "dev": "electron-vite dev",
@@ -19,8 +19,6 @@
   "dependencies": {
     "@fontsource-variable/geist": "^5.3.0",
     "@fontsource-variable/geist-mono": "^5.3.0",
-    "@fontsource/ibm-plex-mono": "^5.3.0",
-    "@fontsource/ibm-plex-sans": "^5.3.0",
     "better-sqlite3": "^11.8.1",
     "chokidar": "^4.0.3",
     "clsx": "^2.1.1",
