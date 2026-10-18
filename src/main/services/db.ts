@@ -15,6 +15,13 @@ const MAX_MIGRATION_BACKUPS = 2
 
 export const DEFAULT_RETENTION = { maxAgeMs: 90 * 86_400_000, keepNewest: 50 }
 
+const TABLE_COLUMNS: Record<string, string[]> = {
+  projects: ['id', 'name', 'path', 'created_at', 'updated_at'],
+  env_files: ['id', 'project_id', 'relative_path', 'is_active', 'created_at', 'updated_at'],
+  env_versions: ['id', 'env_file_id', 'version_number', 'ciphertext', 'iv', 'auth_tag', 'content_hash', 'var_count', 'source', 'note', 'created_at'],
+  secret_hashes: ['id', 'env_version_id', 'project_id', 'env_file_id', 'key_name', 'value_hash', 'created_at']
+}
+
 export class VaultCorruptError extends Error {}
 
 export class VaultDB {
@@ -504,6 +511,49 @@ export class VaultDB {
   public pruneAllVersions(opts = DEFAULT_RETENTION): number {
     const files = this.client.prepare('SELECT id FROM env_files').all() as Array<{ id: string }>
     return this.runInTransaction(() => files.reduce((n, f) => n + this.pruneVersions(f.id, opts), 0))
+  }
+
+  /** Retention from settings: null means keep everything. */
+  public getRetention(): { maxAgeMs: number; keepNewest: number } | null {
+    const days = this.getMeta('retention_days')
+    if (days === '0') return null
+    const n = days ? Number(days) : 90
+    return { maxAgeMs: (Number.isFinite(n) && n > 0 ? n : 90) * 86_400_000, keepNewest: DEFAULT_RETENTION.keepNewest }
+  }
+
+  /** Prunes one file (or all files) using the saved retention setting. */
+  public applyRetention(envFileId?: string): number {
+    const opts = this.getRetention()
+    if (!opts) return 0
+    return envFileId ? this.pruneVersions(envFileId, opts) : this.pruneAllVersions(opts)
+  }
+
+  public exportRows(): Record<string, Array<Record<string, unknown>>> {
+    const out: Record<string, Array<Record<string, unknown>>> = {}
+    for (const table of Object.keys(TABLE_COLUMNS)) {
+      out[table] = this.client.prepare(`SELECT * FROM ${table}`).all() as Array<Record<string, unknown>>
+    }
+    return out
+  }
+
+  /** Replaces every project, file, version and hash in one transaction. Column names are whitelisted. */
+  public replaceAllRows(tables: Record<string, Array<Record<string, unknown>>>): void {
+    this.client.transaction(() => {
+      for (const table of ['secret_hashes', 'env_versions', 'env_files', 'projects']) {
+        this.client.prepare(`DELETE FROM ${table}`).run()
+      }
+      for (const table of ['projects', 'env_files', 'env_versions', 'secret_hashes']) {
+        const cols = TABLE_COLUMNS[table]
+        const insert = this.client.prepare(
+          `INSERT INTO ${table} (${cols.join(', ')}) VALUES (${cols.map((c) => '@' + c).join(', ')})`
+        )
+        for (const row of tables[table] ?? []) {
+          const params: Record<string, unknown> = {}
+          for (const c of cols) params[c] = row[c] ?? null
+          insert.run(params)
+        }
+      }
+    })()
   }
 
   /** Number of distinct keys per project whose value also appears in another project. */

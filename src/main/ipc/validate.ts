@@ -54,3 +54,18 @@ export function isSameAppPage(url: string, loadedUrl: string): boolean {
     return false
   }
 }
+
+const SETTINGS: Record<string, (v: string) => boolean> = {
+  onboarding_done: (v) => v === '1',
+  retention_days: (v) => ['30', '90', '365', '0'].includes(v),
+  quit_on_close: (v) => v === '0' || v === '1'
+}
+
+/** Only these UI settings can be written from the renderer; key material and anything else is rejected. */
+export function parseSetting(key: unknown, value: unknown): { key: string; value: string } | null {
+  if (typeof key !== 'string' || typeof value !== 'string') return null
+  if (!Object.prototype.hasOwnProperty.call(SETTINGS, key) || !SETTINGS[key](value)) return null
+  return { key, value }
+}
+
+export const SETTING_KEYS = Object.keys(SETTINGS)

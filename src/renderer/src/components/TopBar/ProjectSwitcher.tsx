@@ -28,7 +28,7 @@ export const ProjectSwitcher: React.FC<ProjectSwitcherProps> = ({
       if (!rootRef.current?.contains(e.target as Node)) setIsOpen(false)
     }
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') setIsOpen(false)
+      if (e.key === 'Escape' || ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k')) setIsOpen(false)
     }
     window.addEventListener('mousedown', onDown)
     window.addEventListener('keydown', onKey)

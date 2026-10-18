@@ -139,7 +139,7 @@ export const ImportChecklistModal: React.FC<ImportChecklistModalProps> = ({
               No .env files yet. You can still add this project. Any .env file created here is backed up automatically.
             </p>
           ) : (
-            <ul className="max-h-56 overflow-y-auto">
+            <ul className="max-h-56 overflow-y-auto overflow-x-hidden">
               {discoveredFiles.map((file) => {
                 const isChecked = selected.has(file.relativePath)
                 return (

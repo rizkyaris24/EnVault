@@ -70,7 +70,7 @@ export const Dialog: React.FC<DialogProps> = ({
         aria-describedby={description ? 'dialog-description' : undefined}
         tabIndex={-1}
         className={cn(
-          'w-full bg-canvas rounded-dialog shadow-float outline-none overflow-hidden flex flex-col max-h-[90vh]',
+          'w-full bg-canvas rounded-dialog shadow-float outline-none focus-visible:outline-none overflow-hidden flex flex-col max-h-[90vh]',
           widthStyles[maxWidth],
           className
         )}

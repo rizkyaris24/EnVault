@@ -118,3 +118,10 @@ export interface IPCResult<T = void> {
   error?: string
 }
 
+
+export interface AppInfo {
+  version: string
+  platform: string
+  vaultPath: string
+  logPath: string
+}
