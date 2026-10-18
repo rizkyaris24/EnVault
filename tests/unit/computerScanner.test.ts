@@ -49,7 +49,7 @@ describe('computerScanner', () => {
     expect(rootInfo.projectName).toBe('@corp/backend-api')
   })
 
-  it('scans directory recursively while ignoring node_modules, .git, and build dirs', () => {
+  it('scans directory recursively while ignoring node_modules, .git, and build dirs', async () => {
     const projectDir = path.join(tmpRoot, 'my-project')
     fs.mkdirSync(projectDir, { recursive: true })
     fs.writeFileSync(path.join(projectDir, '.env'), 'APP_ENV=development', 'utf8')
@@ -65,7 +65,7 @@ describe('computerScanner', () => {
     fs.mkdirSync(gitDir, { recursive: true })
     fs.writeFileSync(path.join(gitDir, '.env'), 'IGNORED_GIT=true', 'utf8')
 
-    const discovered = scanDirectoryForEnvFiles(tmpRoot)
+    const discovered = await scanDirectoryForEnvFiles(tmpRoot)
 
     expect(discovered).toHaveLength(2)
     expect(discovered.some((p) => p.endsWith('.env'))).toBe(true)

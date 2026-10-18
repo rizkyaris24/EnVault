@@ -118,15 +118,30 @@ export function registerIpcHandlers({ getWindow, onVaultReady }: HandlerDeps): v
     return project
   })
 
-  // Projects: List
-  handle(IPC_CHANNELS.PROJECTS_LIST, (): Project[] =>
-    vaultDB.getProjects().map((p) => {
-      const files = vaultDB.getEnvFiles(p.id)
-      const hasMissing = files.some((f) => !fs.existsSync(path.join(p.path, f.relativePath)))
-      const reuseCount = Object.keys(vaultDB.getReusedSecretsForProject(p.id)).length
-      return { ...p, hasMissingFiles: hasMissing, reuseWarningCount: reuseCount }
-    })
-  )
+  // Projects: List (two queries total, file checks run in parallel)
+  handle(IPC_CHANNELS.PROJECTS_LIST, async (): Promise<Project[]> => {
+    const projects = vaultDB.getProjects()
+    const reuseCounts = vaultDB.getReuseCountsByProject()
+    const pathsByProject = new Map<string, string[]>()
+    for (const f of vaultDB.getActiveFilePaths()) {
+      const list = pathsByProject.get(f.projectId) ?? []
+      list.push(f.relativePath)
+      pathsByProject.set(f.projectId, list)
+    }
+    return Promise.all(
+      projects.map(async (p) => {
+        const checks = await Promise.all(
+          (pathsByProject.get(p.id) ?? []).map((rel) =>
+            fs.promises.access(path.join(p.path, rel)).then(
+              () => true,
+              () => false
+            )
+          )
+        )
+        return { ...p, hasMissingFiles: checks.some((ok) => !ok), reuseWarningCount: reuseCounts.get(p.id) ?? 0 }
+      })
+    )
+  })
 
   // Projects: Remove
   handle(IPC_CHANNELS.PROJECTS_REMOVE, (_e, projectId: unknown) => {

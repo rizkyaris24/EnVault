@@ -82,3 +82,22 @@ describe('Backup and restore safety', () => {
     expect(vaultDB.getVersions(file.id)).toHaveLength(0)
   })
 })
+
+describe('Backup size cap', () => {
+  it('refuses to back up a file over 1 MB', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'envault-big-'))
+    try {
+      vaultDB.init(path.join(tmp, 'vault.db'))
+      vaultCrypto.setTestKey(crypto.randomBytes(32), 'pepper-for-size-test')
+      const dir = path.join(tmp, 'app')
+      fs.mkdirSync(dir)
+      fs.writeFileSync(path.join(dir, '.env'), 'X=' + 'a'.repeat(1024 * 1024 + 10))
+      vaultDB.createProject('p', 'p', dir)
+      const file = vaultDB.createEnvFile('f', 'p', '.env')
+      expect(() => backupService.backupFile(file, dir, 'manual')).toThrow(/larger than 1 MB/)
+    } finally {
+      vaultDB.close()
+      fs.rmSync(tmp, { recursive: true, force: true })
+    }
+  })
+})

@@ -6,6 +6,9 @@ import { parseEnv } from './envParser'
 import { EnvVersion, EnvFile } from '../../shared/types'
 import { resolveInside } from '../utils/safePath'
 
+/** Env files are small; anything larger is almost certainly not one and would block the main thread. */
+export const MAX_BACKUP_BYTES = 1024 * 1024
+
 export class BackupService {
   /**
    * Backs up an env file from disk.
@@ -21,6 +24,10 @@ export class BackupService {
 
     if (!fs.existsSync(fullPath)) {
       return null
+    }
+
+    if (fs.statSync(fullPath).size > MAX_BACKUP_BYTES) {
+      throw new Error(`${file.relativePath} is larger than 1 MB, so it was not backed up`)
     }
 
     const content = fs.readFileSync(fullPath, 'utf8')
@@ -67,6 +74,8 @@ export class BackupService {
         vaultDB.indexSecretHashes(newVersion.id, file.projectId, file.id, secretHashes)
       }
     })
+
+    vaultDB.pruneVersions(file.id)
 
     return { version: newVersion, skippedDuplicate: false }
   }

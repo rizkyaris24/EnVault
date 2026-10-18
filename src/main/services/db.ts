@@ -10,8 +10,16 @@ import {
   SecretReuseReference
 } from '../../shared/types'
 
+export const LATEST_SCHEMA_VERSION = 2
+const MAX_MIGRATION_BACKUPS = 2
+
+export const DEFAULT_RETENTION = { maxAgeMs: 90 * 86_400_000, keepNewest: 50 }
+
+export class VaultCorruptError extends Error {}
+
 export class VaultDB {
   private db: Database.Database | null = null
+  private dbFile: string | null = null
 
   public init(dbPath?: string): void {
     const finalPath = dbPath || path.join(app.getPath('userData'), 'envault.db')
@@ -19,12 +27,29 @@ export class VaultDB {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true })
     }
+    const existed = fs.existsSync(finalPath)
 
-    this.db = new Database(finalPath)
+    let db: Database.Database
+    try {
+      db = new Database(finalPath)
+      if (existed && db.pragma('quick_check', { simple: true }) !== 'ok') {
+        db.close()
+        throw new Error('quick_check failed')
+      }
+    } catch (err) {
+      throw new VaultCorruptError(
+        `The vault database is damaged (${(err as Error).message}). Nothing was changed. ` +
+          `If an automatic copy exists next to it (envault.db.bak-v*), you can restore from that.`
+      )
+    }
+
+    this.db = db
+    this.dbFile = finalPath
     this.db.pragma('journal_mode = WAL')
     this.db.pragma('foreign_keys = ON')
+    this.db.pragma('busy_timeout = 5000')
 
-    this.migrate()
+    this.migrate(existed)
   }
 
   private get client(): Database.Database {
@@ -34,8 +59,27 @@ export class VaultDB {
     return this.db
   }
 
-  private migrate(): void {
-    const schema = `
+  public getSchemaVersion(): number {
+    return this.client.pragma('user_version', { simple: true }) as number
+  }
+
+  private migrate(existed: boolean): void {
+    const current = this.getSchemaVersion()
+    if (current > LATEST_SCHEMA_VERSION) {
+      throw new Error(
+        `This vault was created by a newer version of EnVault (schema ${current}). Update EnVault to open it.`
+      )
+    }
+    if (current === LATEST_SCHEMA_VERSION) return
+
+    // Keep a copy of the pre-migration file so an upgrade can never lose a vault.
+    if (existed && current < LATEST_SCHEMA_VERSION && this.hasTable('projects')) {
+      this.backupBeforeMigration(current)
+    }
+
+    const migrations: Array<() => void> = [
+      // v1: baseline schema (idempotent so databases from older builds, at user_version 0, adopt it)
+      () => this.client.exec(`
       CREATE TABLE IF NOT EXISTS vault_meta (
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL
@@ -85,8 +129,55 @@ export class VaultDB {
 
       CREATE INDEX IF NOT EXISTS idx_secret_hashes_val ON secret_hashes(value_hash);
       CREATE INDEX IF NOT EXISTS idx_versions_file ON env_versions(env_file_id, created_at DESC);
-    `
-    this.client.exec(schema)
+    `),
+      // v2: one row per (file, version number)
+      () => {
+        const dup = this.client
+          .prepare('SELECT 1 FROM env_versions GROUP BY env_file_id, version_number HAVING COUNT(*) > 1 LIMIT 1')
+          .get()
+        if (dup) {
+          this.client.exec(`
+            UPDATE env_versions SET version_number = (
+              SELECT COUNT(*) FROM env_versions e2
+              WHERE e2.env_file_id = env_versions.env_file_id
+                AND (e2.created_at < env_versions.created_at
+                     OR (e2.created_at = env_versions.created_at AND e2.rowid <= env_versions.rowid))
+            )
+          `)
+        }
+        this.client.exec(
+          'CREATE UNIQUE INDEX IF NOT EXISTS idx_versions_unique ON env_versions(env_file_id, version_number)'
+        )
+      }
+    ]
+
+    for (let v = current + 1; v <= LATEST_SCHEMA_VERSION; v++) {
+      this.client.transaction(() => {
+        migrations[v - 1]()
+        this.client.pragma(`user_version = ${v}`)
+      })()
+    }
+  }
+
+  private hasTable(name: string): boolean {
+    return !!this.client.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(name)
+  }
+
+  private backupBeforeMigration(fromVersion: number): void {
+    const file = this.dbFile!
+    this.client.pragma('wal_checkpoint(TRUNCATE)')
+    fs.copyFileSync(file, `${file}.bak-v${fromVersion}`)
+
+    const base = path.basename(file)
+    const dir = path.dirname(file)
+    const baks = fs
+      .readdirSync(dir)
+      .filter((f) => f.startsWith(`${base}.bak-v`))
+      .map((f) => ({ f, t: fs.statSync(path.join(dir, f)).mtimeMs }))
+      .sort((a, b) => b.t - a.t)
+    for (const old of baks.slice(MAX_MIGRATION_BACKUPS)) {
+      fs.unlinkSync(path.join(dir, old.f))
+    }
   }
 
   public runInTransaction<T>(fn: () => T): T {
@@ -393,6 +484,51 @@ export class VaultDB {
     return result
   }
 
+  /** Keeps the newest `keepNewest` versions plus anything younger than `maxAgeMs`; the latest is always kept. */
+  public pruneVersions(envFileId: string, opts = DEFAULT_RETENTION): number {
+    const cutoff = Date.now() - opts.maxAgeMs
+    const res = this.client
+      .prepare(`
+        DELETE FROM env_versions
+        WHERE env_file_id = @fileId
+          AND created_at < @cutoff
+          AND id NOT IN (
+            SELECT id FROM env_versions WHERE env_file_id = @fileId
+            ORDER BY version_number DESC LIMIT @keep
+          )
+      `)
+      .run({ fileId: envFileId, cutoff, keep: Math.max(1, opts.keepNewest) })
+    return res.changes
+  }
+
+  public pruneAllVersions(opts = DEFAULT_RETENTION): number {
+    const files = this.client.prepare('SELECT id FROM env_files').all() as Array<{ id: string }>
+    return this.runInTransaction(() => files.reduce((n, f) => n + this.pruneVersions(f.id, opts), 0))
+  }
+
+  /** Number of distinct keys per project whose value also appears in another project. */
+  public getReuseCountsByProject(): Map<string, number> {
+    const rows = this.client
+      .prepare(`
+        SELECT sh1.project_id as projectId, COUNT(DISTINCT sh1.key_name) as n
+        FROM secret_hashes sh1
+        WHERE EXISTS (
+          SELECT 1 FROM secret_hashes sh2
+          WHERE sh2.value_hash = sh1.value_hash AND sh2.project_id != sh1.project_id
+        )
+        GROUP BY sh1.project_id
+      `)
+      .all() as Array<{ projectId: string; n: number }>
+    return new Map(rows.map((r) => [r.projectId, r.n]))
+  }
+
+  /** Active tracked files across all projects, in one query. */
+  public getActiveFilePaths(): Array<{ projectId: string; relativePath: string }> {
+    return this.client
+      .prepare('SELECT project_id as projectId, relative_path as relativePath FROM env_files WHERE is_active = 1')
+      .all() as Array<{ projectId: string; relativePath: string }>
+  }
+
   public getStats(): { totalProjects: number; totalFiles: number; totalVersions: number; reusedSecretCount: number } {
     const projects = this.client.prepare('SELECT COUNT(*) as count FROM projects').get() as { count: number }
     const files = this.client.prepare('SELECT COUNT(*) as count FROM env_files WHERE is_active = 1').get() as { count: number }
@@ -414,6 +550,9 @@ export class VaultDB {
 
   public close(): void {
     if (this.db) {
+      try {
+        this.db.pragma('wal_checkpoint(TRUNCATE)')
+      } catch (_) {}
       this.db.close()
       this.db = null
     }
